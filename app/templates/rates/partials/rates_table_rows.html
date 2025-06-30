@@ -1,0 +1,76 @@
+{% for row in rows %}
+<tr class="{% if row.date_status == 'today' %}bg-green-50 font-semibold{% elif row.date_status == 'future' %}text-gray-400{% endif %} hover:bg-gray-100 transition">
+  <!-- Reported Date -->
+  <td class="px-4 py-2 align-middle">
+    {% if row.date_status == 'today' %}
+      <span class="inline-flex items-center justify-center text-white bg-green-500 font-semibold p-1 rounded-full">
+        {{ row.reported_date }}
+      </span>
+    {% else %}
+      <span class="font-medium">{{ row.reported_date }}</span>
+    {% endif %}
+  </td>
+
+  <!-- Data cells -->
+  {% for cell in row.cells %}
+  <td class="px-4 py-2 align-top text-sm">
+    <div class="flex items-center gap-1">
+      {% if cell.trend == 'up' %}
+        <span class="text-green-600 font-semibold">{{ cell.display }}</span>
+        <svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M5 10l5-5 5 5H5z" />
+        </svg>
+      {% elif cell.trend == 'down' %}
+        <span class="text-red-600 font-semibold">{{ cell.display }}</span>
+        <svg class="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M15 10l-5 5-5-5h10z" />
+        </svg>
+      {% else %}
+       <span>{{ cell.display }}</span>
+      {% endif %}
+    </div>
+
+    {% if cell.percent %}
+    <div class="relative group mt-1 inline-block">
+      <span class="text-xs px-2 py-1 rounded bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-neutral-200 
+        {% if cell.trend == 'up' %}bg-green-100 text-green-700{% elif cell.trend == 'down' %}bg-red-100 text-red-700{% endif %}">
+        {{ cell.percent }}
+      </span>
+
+      {% if cell.tooltip %}
+      <!-- Tooltip -->
+      <div class="tooltip absolute z-50 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition
+                  bottom-full left-1/2 transform -translate-x-1/2 mt-1 w-72 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 shadow-lg text-sm p-3 rounded-lg">
+        <table class="w-full text-xs text-left border-collapse">
+          <thead>
+            <tr class="border-b dark:border-neutral-700">
+              <th class="py-1">Compare</th>
+              <th class="py-1">Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="py-1 dark:text-neutral-300">Today</td>
+              <td class="py-1 dark:text-neutral-300">{{ cell.latest }}</td>
+            </tr>
+            <tr>
+              <td class="py-1 dark:text-neutral-300">Change</td>
+              <td class="py-1 dark:text-neutral-300">{{ cell.change }}</td>
+            </tr>
+            <tr>
+              <td class="py-1 dark:text-neutral-300">Previous ({{ cell.compare_date }})</td>
+              <td class="py-1 dark:text-neutral-300">{{ cell.compare }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </td>
+  {% endfor %}
+
+  <!-- Updated Date -->
+  <td>{{ row.updated_date }}</td>
+</tr>
+{% endfor %}

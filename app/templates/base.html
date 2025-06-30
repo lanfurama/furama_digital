@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Dashboard{% endblock %}</title>
+
+    <!-- Tailwind CSS (CDN hoặc tự build) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script> -->
+    <script src="https://unpkg.com/htmx.org@1.7.0"></script>
+    <script src="https://unpkg.com/alpinejs" defer></script>
+
+    {% block extra_head %}{% endblock %}
+  </head>
+
+  <body class="bg-gray-50 min-h-screen text-gray-800">
+
+    {% include "components/menu.html" %}
+
+    <!-- Flash messages -->
+    {% if messages %}
+      <div class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md px-4" 
+           x-data="{ show: true }"
+           x-init="setTimeout(() => show = false, 5000)"
+           x-show="show"
+           x-transition>
+        {% for message in messages %}
+          <div class="mb-4 p-4 rounded-lg shadow-md text-black
+                      {% if message.tags == 'success' %} bg-green-500
+                      {% elif message.tags == 'error' %} bg-red-500
+                      {% elif message.tags == 'warning' %} bg-yellow-500
+                      {% else %} bg-blue-500
+                      {% endif %}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <!-- Main page content -->
+    <main class="p-6">
+      {% block content %}
+      {% endblock %}
+    </main>
+
+    {% block extra_script %}{% endblock %}
+  </body>
+</html>

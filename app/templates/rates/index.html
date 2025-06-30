@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+
+{% block title %}Rates{% endblock %}
+
+{% block extra_head %}
+  <style>
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background-color: white;
+    }
+
+    tbody#ratesTableBody {
+      display: block;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+
+    thead,
+    tbody tr {
+      display: table;
+      width: 100%;
+      table-layout: fixed;
+    }
+
+    .percentage-cell {
+      position: relative;
+      cursor: pointer;
+    }
+
+    .tooltip {
+      visibility: hidden;
+      position: absolute;
+      bottom: 125%;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 999;
+      opacity: 0;
+      transition: opacity 0.2s;
+      background: #f9f9f9;
+      border: 1px solid #ccc;
+      padding: 8px;
+      width: 300px;
+      font-size: 14px;
+      border-radius: 6px;
+    }
+
+    .percentage-cell:hover .tooltip {
+      visibility: visible;
+      opacity: 1;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+      <h2 class="text-2xl font-bold mb-6">Rates</h2>
+
+      <!-- Buttons -->
+      <div class="flex items-center justify-between flex-wrap gap-4 mt-4" x-data="{ active: 7 }">
+      <!-- Nút chọn khoảng thời gian -->
+      <div class="flex items-center gap-2">
+        <button
+          :class="active === 7 ? 'bg-black text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'"
+          @click="active = 7"
+          hx-get="{% url 'compare_dashboard' comparison_period=7 %}"
+          hx-target="#ratesTableBody"
+          class="px-4 py-2 rounded-md text-sm font-medium transition"
+        >
+          vs. 7 days ago
+        </button>
+
+        <button
+          :class="active === 14 ? 'bg-black text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'"
+          @click="active = 14"
+          hx-get="{% url 'compare_dashboard' comparison_period=14 %}"
+          hx-target="#ratesTableBody"
+          class="px-4 py-2 rounded-md text-sm font-medium transition"
+        >
+          vs. 14 days ago
+        </button>
+      </div>
+
+      <!-- Nút Import và Refresh bên phải -->
+      <div class="flex items-center gap-3">
+        <!-- IMPORT -->
+        <form action="{% url 'import_excel' %}" method="post" enctype="multipart/form-data" class="relative">
+          {% csrf_token %}
+          <input id="excelFile" type="file" name="excel_file" accept=".xlsx" class="hidden" onchange="this.form.submit()">
+          <label for="excelFile"
+                class="cursor-pointer flex items-center gap-1 px-3 py-2 bg-green-700 text-white text-sm rounded-md">
+            Import Excel File
+          </label>
+        </form>
+
+        <!-- REFRESH -->
+        <button
+          hx-get="{% url 'compare_dashboard' comparison_period=7 %}"
+          hx-target="#ratesTableBody"
+          class="flex items-center gap-1 px-3 py-2 rounded-md text-sm font-medium bg-black text-white"
+        >
+          Refresh
+        </button>
+      </div>
+    </div>
+
+      <!-- Table -->
+      <div class="relative mt-6" x-data="{ loading: false }"
+           x-init="() => {
+             document.body.addEventListener('htmx:beforeRequest', () => loading = true);
+             document.body.addEventListener('htmx:afterRequest', () => loading = false);
+           }">
+
+        <!-- Loader overlay -->
+        <div x-show="loading" class="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center z-20">
+          <div class="text-gray-700 text-lg font-medium animate-pulse">Loading...</div>
+        </div>
+
+        <div class="overflow-hidden border rounded-lg shadow bg-white">
+          <table class="w-full text-sm text-left table-auto">
+            <thead class="bg-gray-100 dark:bg-neutral-700 border-b">
+              <tr>
+                <th class="p-3 font-semibold">Report Date</th>
+                {% for col_key, col_label in columns %}
+                  <th class="p-3 font-semibold">{{ col_label }}</th>
+                {% endfor %}
+                <th class="p-3 font-semibold">Updated Date</th>
+              </tr>
+            </thead>
+
+            <tbody id="ratesTableBody"
+                   hx-get="{% url 'compare_dashboard' comparison_period=7 %}"
+                   hx-trigger="load"
+                   hx-target="#ratesTableBody"
+                   class="divide-y">
+              {% include "rates/partials/rates_table_rows.html" %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {% endblock %}

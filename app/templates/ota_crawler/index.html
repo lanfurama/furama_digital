@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}OTA Crawler{% endblock %}
+
+{% block content %}
+  <h2 class="text-2xl font-bold mb-6">OTA Comparison</h2>
+
+  {% for source, reviews in data.items %}
+    <h2 class="text-xl font-bold border-b border-gray-300 py-2 mb-4">{{ source|title }}</h2>
+
+    <!-- Review Table -->
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm border border-gray-300">
+        <thead class="bg-gray-100 text-left">
+          <tr>
+            <th rowspan="2" class="px-4 py-2 border">Resort</th>
+            <th rowspan="2" class="px-4 py-2 border">Rating</th>
+            <th rowspan="2" class="px-4 py-2 border">Total Reviews</th>
+            <th colspan="{{ reviews.0.scores|length }}" class="text-center px-4 py-2 border">Scores</th>
+            <th rowspan="2" class="px-4 py-2 border">URL</th>
+            <th rowspan="2" class="px-4 py-2 border">Updated at</th>
+          </tr>
+          <tr>
+            {% for score in reviews.0.scores %}
+              <th class="px-4 py-2 border">{{ score.criterion }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for review in reviews %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-4 py-2 border font-medium">{{ review.resort }}</td>
+              <td class="px-4 py-2 border">
+                <span class="font-medium">{{ review.rating }}</span>
+                {% if review.increased_rating > 0 %}
+                  <span class="ml-2 inline-block text-xs text-green-700 bg-green-100 px-2 py-1 rounded" title="Compare to: {{ review.last_week_review_updated_at }}">
+                    +{{ review.increased_rating }}
+                  </span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-2 border">
+                <span class="font-medium">{{ review.total_reviews }}</span>
+                {% if review.increased_total_reviews > 0 %}
+                  <span class="ml-2 inline-block text-xs text-green-700 bg-green-100 px-2 py-1 rounded" title="Compare to: {{ review.last_week_review_updated_at }}">
+                    +{{ review.increased_total_reviews }}
+                  </span>
+                {% endif %}
+              </td>
+              {% for score in review.scores %}
+                <td class="px-4 py-2 border text-red-500">
+                  <span class="font-medium">{{ score.value }}</span>
+                  {% if score.increased_value > 0 %}
+                    <span class="ml-2 inline-block text-xs text-green-700 bg-green-100 px-2 py-1 rounded" title="Compare to: {{ review.last_week_review_updated_at }}">
+                      +{{ score.increased_value }}
+                    </span>
+                  {% endif %}
+                </td>
+              {% endfor %}
+              <td class="px-4 py-2 border">
+                <a href="{{ review.url }}" class="inline-block bg-black text-white text-xs px-3 py-1 rounded hover:bg-gray-800" target="_blank">View</a>
+              </td>
+              <td class="px-4 py-2 border">{{ review.updated_at }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endfor %}
+
+  <!-- Footer Message -->
+  <div class="mt-8 p-4 bg-blue-50 text-blue-800 rounded">
+    <p>
+      All data provided is based on our crawler results for the selected resorts.
+    </p>
+  </div>
+{% endblock %}
