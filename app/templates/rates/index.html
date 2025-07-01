@@ -79,6 +79,20 @@
         </div>
       </div>
     </div>
+
+    <!-- Chọn tháng -->
+    <div class="flex flex-col">
+        <label class="text-sm font-medium mb-1 text-gray-700">Select Month</label>
+        <div class="relative">
+            <input type="month"
+                  id="monthInput"
+                  name="month"
+                  class="border border-gray-300 pl-10 pr-4 py-2 rounded-md text-sm w-52 bg-white cursor-pointer shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  value="{{ request.GET.month|default:'' }}"
+                  onchange="fetchRatesByMonth(this)">
+        </div>
+    </div>
+
   </div>
 
 </div>
@@ -193,6 +207,16 @@
       }
     };
   }
+
+  function fetchRatesByMonth(monthInput) {
+    const selectedMonth = monthInput.value;
+    if (selectedMonth) {
+        const url = `{% url 'rates' %}?month=${selectedMonth}`;
+        htmx.ajax('GET', url, {
+            target: '#ratesTableBody', 
+        });
+    }
+}
 </script>
 
       {% endblock %}

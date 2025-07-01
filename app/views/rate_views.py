@@ -13,6 +13,7 @@ from django.contrib import messages
 from django.utils.dateparse import parse_date
 from datetime import datetime, timedelta, date
 from app.services.automation.lighthouse.fetch_rates import LighthouseRateFetcher
+import calendar
 
 # ========================
 # Utilities
@@ -171,10 +172,11 @@ def process_rate_row(report_date, entries, start_dt=None, end_dt=None):
 def get_date_range(request):
     start_str = request.GET.get("start")
     end_str = request.GET.get("end")
+    month_str = request.GET.get("month")
 
     # Nếu có tham số start & end trong URL
     if start_str and end_str:
-        return parse_date(start_str), parse_date(end_str)
+        return parse_date(start_str), parse_date(end_str), month_str
 
     # Lấy tất cả ngày có trong DB
     updated_dates = DailyRate.objects.order_by("updated_date").values_list("updated_date", flat=True).distinct()
@@ -189,14 +191,19 @@ def get_date_range(request):
     dates_before = [d.date() for d in updated_dates if d.date() < end]
     start = max(dates_before) if dates_before else end  # fallback nếu chỉ có 1 ngày
 
-    return start, end
+    return start, end, month_str
 
 
-def build_comparison_rows(grouped_rates, start_dt, end_dt):
+def build_comparison_rows(grouped_rates, start_dt, end_dt, month_str=None):
     rows = []
     today = date.today()
 
     for report_date, entries in grouped_rates.items():
+        if month_str:
+            # Lọc theo tháng nếu có tháng
+            if report_date.strftime("%Y-%m") != month_str:
+                continue  # Nếu reported_date không phải tháng được chọn, bỏ qua
+
         latest = find_latest_before(entries, end_dt)
         compare = find_latest_before(entries, start_dt)
 
@@ -254,20 +261,27 @@ def get_lighthouse_rates(request):
 # ========================
 def index(request):
     # 1. Xử lý ngày bắt đầu và kết thúc
-    start_date, end_date = get_date_range(request)
-    print("Start:", start_date , "End:", end_date)
+    start_date, end_date, month_str = get_date_range(request)
+    print("Start:", start_date , "End:", end_date, "Month:", month_str)
+
+    if not month_str:
+        month_str = datetime.now().strftime("%Y-%m")
+
+    # 2. Tách tháng và năm từ month_str (ví dụ: '2025-07')
+    year, month = map(int, month_str.split('-'))
+    print(year, month)
 
     # 2. Ép thành datetime để filter chính xác
     start_dt = datetime.combine(start_date, datetime.min.time())
     end_dt = datetime.combine(end_date, datetime.max.time())
 
     # 3. Truy vấn dữ liệu
-    rates = DailyRate.objects.filter(updated_date__lte=end_dt).order_by("reported_date")[:200]
+    rates = DailyRate.objects.filter(updated_date__lte=end_dt, reported_date__year=year, reported_date__month=month).order_by("reported_date")
     valid_dates = sorted(set(rate.updated_date.strftime('%Y-%m-%d') for rate in rates))
     grouped_rates = group_rates_by_reported_date(rates)
 
      # 4. Xử lý bảng
-    rows = build_comparison_rows(grouped_rates, start_dt, end_dt)
+    rows = build_comparison_rows(grouped_rates, start_dt, end_dt, month_str)
 
     # 5. Tạo context
     context = {
