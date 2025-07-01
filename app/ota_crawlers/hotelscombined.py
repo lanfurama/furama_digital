@@ -13,9 +13,14 @@ class HotelsCombinedCrawler(BaseCrawler):
 
         urls = [
             "https://www.hotelscombined.com/hotels/Furama-Resort-Danang,Da-Nang-p17850-h2259-details",
-            "https://www.hotelscombined.com/hotels/Pullman-Saigon-Centre,Ho-Chi-Minh-City-p17775-h563135-details",
             "https://www.hotelscombined.com/hotels/Tia-Wellness-Resort,Spa-Inclusive,Da-Nang-p17850-h367310-details",
-            "https://www.hotelscombined.com/hotels/Premier-Village-Danang-Resort,Managed-by-Accor,Da-Nang-p17850-h2069660-details"
+            "https://www.hotelscombined.com/hotels/Pullman-Danang-Beach-Resort,Da-Nang-p17850-h399727-details",
+            "https://www.hotelscombined.com/hotels/Premier-Village-Danang-Resort,Managed-by-Accor,Da-Nang-p17850-h2069660-details",
+            "https://www.hotelscombined.com/hotels/Danang-Marriott-Resort--Spa,Non-Nuoc-Beach-Villas,Da-Nang-p17850-h2733746-details",
+            "https://www.hotelscombined.com/hotels/Hyatt-Regency-Danang-Resort-and-Spa,Da-Nang-p17850-h419224-details",
+            "https://www.hotelscombined.com/hotels/Naman-Retreat,Da-Nang-p17850-h2230903-details",
+            "https://www.hotelscombined.com/hotels/Sheraton-Grand-Danang-Beach-Resort--SPA,Da-Nang-p17850-h3602259-details",
+            "https://www.hotelscombined.com/hotels/Fusion-Resort-and-Villas-Da-Nang,Da-Nang-p17850-h9260634-details"
         ]
         self.urls = urls
 
@@ -28,9 +33,15 @@ class HotelsCombinedCrawler(BaseCrawler):
         else:
             return "unknown"
 
-    def extract_rating(self, text):
-        match = re.search(r"(\d\.\d)\s*(?:/10|out of 10)?", text)
-        return float(match.group(1)) if match else None
+    def extract_rating(self, soup):
+        div_tag = soup.find('div', attrs={'data-automation': 'bubbleRatingValue'})
+        if div_tag:
+            text = div_tag.get_text(strip=True)
+            try:
+                return float(text)
+            except ValueError:
+                return None
+        return None
 
     def extract_total_reviews(self, text):
         for pattern in [
@@ -66,7 +77,7 @@ class HotelsCombinedCrawler(BaseCrawler):
             text = soup.get_text(separator="\n")
 
             resort = self.extract_resort_name(url)
-            rating = self.extract_rating(text)
+            rating = self.extract_rating(soup)
             total_reviews = self.extract_total_reviews(text)
             breakdown = self.extract_breakdown(soup)
 

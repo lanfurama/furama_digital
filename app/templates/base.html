@@ -4,12 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{% block title %}Dashboard{% endblock %}</title>
+    {% load static %}
+    <link rel="icon" type="image/svg+xml" href="{% static 'assets/img/logo.svg' %}">
 
     <!-- Tailwind CSS (CDN hoặc tự build) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script> -->
     <script src="https://unpkg.com/htmx.org@1.7.0"></script>
     <script src="https://unpkg.com/alpinejs" defer></script>
+    <!-- Flowbite CSS -->
+    <!-- Litepicker CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css" />
+    <!-- Litepicker JS -->
+    <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
 
     {% block extra_head %}{% endblock %}
   </head>
@@ -39,7 +46,7 @@
     {% endif %}
 
     <!-- Main page content -->
-    <main class="p-6">
+    <main class="p-4">
       {% block content %}
       {% endblock %}
     </main>

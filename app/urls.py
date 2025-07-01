@@ -3,10 +3,9 @@ from . import views
 
 urlpatterns = [
     # rate_views
-    path("", views.rate_views.dashboard, name="daily_rates_dashboard"),
-    path("import_excel/", views.rate_views.import_excel, name="import_excel"),
-    path('compare/<int:comparison_period>/', views.rate_views.dashboard, name='compare_dashboard'),
+    path("rates", views.rate_views.index, name="rates"),
     path("ota/", views.ota_crawler_home, name="ota_review_crawler"),
+    path("api/get_lighthouse_rates/", views.rate_views.get_lighthouse_rates, name="get_lighthouse_rates"),
 
     #ota_crawler_views
     path("api/reviews/crawl", views.ota_crawler_views.crawl_hotel_reviews)

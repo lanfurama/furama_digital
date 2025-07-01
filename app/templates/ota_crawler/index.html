@@ -1,76 +1,115 @@
-{% extends "base.html" %}
-
-{% block title %}OTA Crawler{% endblock %}
+{% extends "base.html" %} 
+{% block title %}OTA Crawler{% endblock %} 
 
 {% block content %}
-  <h2 class="text-2xl font-bold mb-6">OTA Comparison</h2>
+<h2 class="text-2xl font-bold mb-6">OTA Comparison</h2>
 
-  {% for source, reviews in data.items %}
-    <h2 class="text-xl font-bold border-b border-gray-300 py-2 mb-4">{{ source|title }}</h2>
+{% for source, group in data.items %}
+<h2 class="text-xl font-bold border-b border-gray-300 py-2 mb-4">
+  {{ source|title }}
+</h2>
 
-    <!-- Review Table -->
-    <div class="overflow-x-auto">
-      <table class="min-w-full text-sm border border-gray-300">
-        <thead class="bg-gray-100 text-left">
-          <tr>
-            <th rowspan="2" class="px-4 py-2 border">Resort</th>
-            <th rowspan="2" class="px-4 py-2 border">Rating</th>
-            <th rowspan="2" class="px-4 py-2 border">Total Reviews</th>
-            <th colspan="{{ reviews.0.scores|length }}" class="text-center px-4 py-2 border">Scores</th>
-            <th rowspan="2" class="px-4 py-2 border">URL</th>
-            <th rowspan="2" class="px-4 py-2 border">Updated at</th>
-          </tr>
-          <tr>
-            {% for score in reviews.0.scores %}
-              <th class="px-4 py-2 border">{{ score.criterion }}</th>
-            {% endfor %}
-          </tr>
-        </thead>
-        <tbody>
-          {% for review in reviews %}
-            <tr class="hover:bg-gray-50">
-              <td class="px-4 py-2 border font-medium">{{ review.resort }}</td>
+<!-- Review Table -->
+<div class="overflow-x-auto">
+  <table class="min-w-full text-sm border border-gray-300">
+    <thead class="bg-gray-100 text-left">
+      <tr>
+        <th rowspan="2" class="px-4 py-2 border">Resort</th>
+        <th rowspan="2" class="px-4 py-2 border">Rating</th>
+        <th rowspan="2" class="px-4 py-2 border">Total Reviews</th>
+        <th colspan="{{ group.criteria_keys|length }}" class="text-center px-4 py-2 border">Scores</th>
+        <th rowspan="2" class="px-4 py-2 border">URL</th>
+        <th rowspan="2" class="px-4 py-2 border">Updated at</th>
+      </tr>
+      <tr>
+        {% for key in group.criteria_keys %}
+        <th class="px-4 py-2 border">{{ key|capfirst }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for review in group.reviews %}
+      <tr class="hover:bg-gray-50">
+        <td class="px-4 py-2 border font-medium">{{ review.resort }}</td>
+
+        <!-- Rating -->
+        <td class="px-4 py-2 border">
+          <span class="font-medium">{{ review.rating }}</span>
+          {% if review.increased_rating > 0 %}
+          <span class="ml-2 inline-block text-xs text-green-700 bg-green-100 px-2 py-1 rounded"
+                title="Compare to: {{ review.last_week_review_updated_at }}">
+            +{{ review.increased_rating }}
+          </span>
+          {% elif review.decreased_rating > 0 %}
+          <span class="ml-2 inline-block text-xs text-red-700 bg-red-100 px-2 py-1 rounded"
+                title="Compare to: {{ review.last_week_review_updated_at }}">
+            -{{ review.decreased_rating }}
+          </span>
+          {% endif %}
+        </td>
+
+        <!-- Total Reviews -->
+        <td class="px-4 py-2 border">
+          <span class="font-medium">{{ review.total_reviews }}</span>
+          {% if review.increased_total_reviews > 0 %}
+          <span class="ml-2 inline-block text-xs text-green-700 bg-green-100 px-2 py-1 rounded"
+                title="Compare to: {{ review.last_week_review_updated_at }}">
+            +{{ review.increased_total_reviews }}
+          </span>
+          {% elif review.decreased_total_reviews > 0 %}
+          <span class="ml-2 inline-block text-xs text-red-700 bg-red-100 px-2 py-1 rounded"
+                title="Compare to: {{ review.last_week_review_updated_at }}">
+            -{{ review.decreased_total_reviews }}
+          </span>
+          {% endif %}
+        </td>
+
+        <!-- Scores by key -->
+       {% for key in group.criteria_keys %}
+        {% with found=False %}
+          {% for s in review.scores %}
+            {% if s.key == key and not found %}
               <td class="px-4 py-2 border">
-                <span class="font-medium">{{ review.rating }}</span>
-                {% if review.increased_rating > 0 %}
-                  <span class="ml-2 inline-block text-xs text-green-700 bg-green-100 px-2 py-1 rounded" title="Compare to: {{ review.last_week_review_updated_at }}">
-                    +{{ review.increased_rating }}
+                <span class="font-medium">{{ s.value }}</span>
+                {% if s.increased_value > 0 %}
+                  <span class="ml-2 inline-block text-xs text-green-700 bg-green-100 px-2 py-1 rounded"
+                        title="Compare to: {{ review.last_week_review_updated_at }}">
+                    +{{ s.increased_value }}
+                  </span>
+                {% elif s.decreased_value > 0 %}
+                  <span class="ml-2 inline-block text-xs text-red-700 bg-red-100 px-2 py-1 rounded"
+                        title="Compare to: {{ review.last_week_review_updated_at }}">
+                    -{{ s.decreased_value }}
                   </span>
                 {% endif %}
               </td>
-              <td class="px-4 py-2 border">
-                <span class="font-medium">{{ review.total_reviews }}</span>
-                {% if review.increased_total_reviews > 0 %}
-                  <span class="ml-2 inline-block text-xs text-green-700 bg-green-100 px-2 py-1 rounded" title="Compare to: {{ review.last_week_review_updated_at }}">
-                    +{{ review.increased_total_reviews }}
-                  </span>
-                {% endif %}
-              </td>
-              {% for score in review.scores %}
-                <td class="px-4 py-2 border text-red-500">
-                  <span class="font-medium">{{ score.value }}</span>
-                  {% if score.increased_value > 0 %}
-                    <span class="ml-2 inline-block text-xs text-green-700 bg-green-100 px-2 py-1 rounded" title="Compare to: {{ review.last_week_review_updated_at }}">
-                      +{{ score.increased_value }}
-                    </span>
-                  {% endif %}
-                </td>
-              {% endfor %}
-              <td class="px-4 py-2 border">
-                <a href="{{ review.url }}" class="inline-block bg-black text-white text-xs px-3 py-1 rounded hover:bg-gray-800" target="_blank">View</a>
-              </td>
-              <td class="px-4 py-2 border">{{ review.updated_at }}</td>
-            </tr>
+              {% with found=True %}{% endwith %}
+            {% endif %}
           {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  {% endfor %}
+        {% endwith %}
+      {% endfor %}
 
-  <!-- Footer Message -->
-  <div class="mt-8 p-4 bg-blue-50 text-blue-800 rounded">
-    <p>
-      All data provided is based on our crawler results for the selected resorts.
-    </p>
-  </div>
+
+        <!-- URL -->
+        <td class="px-4 py-2 border">
+          <a href="{{ review.url }}"
+             class="inline-block bg-black text-white text-xs px-3 py-1 rounded hover:bg-gray-800"
+             target="_blank">View</a>
+        </td>
+
+        <!-- Updated at -->
+        <td class="px-4 py-2 border">{{ review.updated_at }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endfor %}
+
+<!-- Footer Message -->
+<div class="mt-8 p-4 bg-blue-50 text-blue-800 rounded">
+  <p>
+    All data provided is based on our crawler results for the selected resorts.
+  </p>
+</div>
 {% endblock %}

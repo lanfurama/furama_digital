@@ -1,76 +1,81 @@
 # reviews/crawlers/hotelscombined.py
 
 import re
+import logging
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
-from .base_crawler import BaseCrawler
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.by import By
+from time import sleep
+from .base_crawler import BaseCrawler
+
+logger = logging.getLogger(__name__)
 
 class AgodaCrawler(BaseCrawler):
     def __init__(self):
         self.source = "agoda"
-        self.headers = {"User-Agent": "Mozilla/5.0"}
         self.urls = [
             "https://www.agoda.com/furama-resort-danang/hotel/da-nang-vn.html",
             "https://www.agoda.com/aoa-hotel-apartment-da-nang-by-thg/hotel/all/da-nang-vn.html?"
         ]
 
-         # Cấu hình Selenium để không mở giao diện trình duyệt
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        self.driver = webdriver.Chrome(options=chrome_options)
+    def _init_driver(self):
+        options = Options()
+        options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36")
+        options.add_argument("start-maximized")
+        options.add_experimental_option("detach", True)
+        options.add_argument("--headless")  # Bật nếu chạy background
+        return webdriver.Chrome(options=options)
 
     def extract_resort_name(self, url):
         match = re.search(r'agoda\.com/(?:vi-vn/)?([^/]+)/hotel/', url)
         if match:
-            resort_name = match.group(1).replace("-", " ").title()
-            return resort_name
-        else:
-            return "unknown"
+            return match.group(1).replace("-", " ").title()
+        return "Unknown"
 
     def extract_rating(self, text):
         match = re.search(r"(\d\.\d)\s*(?:/10|out of 10)?", text)
         return float(match.group(1)) if match else None
 
     def extract_total_reviews(self, text):
-        for pattern in [
-            r"([\d,]+)\s+bài đánh giá",
-            r"([\d,]+)\s+reviews"
-        ]:
+        patterns = [r"([\d,]+)\s+bài đánh giá", r"([\d,]+)\s+reviews"]
+        for pattern in patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 return int(match.group(1).replace(",", ""))
         return None
-
+    
     def extract_breakdown(self, soup):
         data = {}
-        score_blocks = soup.select("div.Review-travelerCell--right")
-        for block in score_blocks:
-            label_elem = block.select_one(".sc-hKgILt")
-            score_elem = block.select_one(".kkDVzi")
-            if label_elem and score_elem:
-                key = label_elem.text.strip().lower().replace(" ", "_")
-                try:
-                    score = float(score_elem.text.strip())
-                    data[key] = score
-                except:
-                    continue
+        breakdown_section = soup.select_one("div.Review-travelerCell--right")
+
+        if not breakdown_section:
+            return data
+
+        # Lấy từng cặp <li> tương ứng với từng tiêu chí
+        for li in breakdown_section.select("li"):
+            try:
+                label = li.select_one("span.ikLOWN")
+                score = li.select_one("span.bfKWaL, span.kRWALb")  # Có 2 loại class
+                if label and score:
+                    key = label.text.strip().lower().replace(" ", "_")
+                    value = float(score.text.strip())
+                    data[key] = value
+            except Exception:
+                continue
+
         return data
 
     def crawl(self, url):
-        print(f"🌐 Crawling: {url}")
+        driver = self._init_driver()
         try:
-            # Sử dụng Selenium để tải trang và lấy nội dung
-            self.driver.get(url)
+            driver.implicitly_wait(15)
+            driver.get(url)
 
-            # Đợi trang tải đầy đủ (có thể cần điều chỉnh thời gian)
-            self.driver.implicitly_wait(3)  # seconds
-
-            # Lấy HTML của trang
-            html = self.driver.page_source
-            self.driver.quit()  # 🧹 Quan trọng: đóng driver đúng lúc
+            html = driver.page_source
             soup = BeautifulSoup(html, "html.parser")
             text = soup.get_text(separator="\n")
 
@@ -89,9 +94,7 @@ class AgodaCrawler(BaseCrawler):
             }
 
         except Exception as e:
-            return {"url": url, "error": str(e)}
-        
-    def __del__(self):
-        if self.driver:
-            self.driver.quit()
-
+            logger.error(f"[{self.source.upper()}] Lỗi khi crawl {url}: {str(e)}", exc_info=True)
+            return None  # hoặc raise e nếu muốn báo lỗi ở API
+        finally:
+            driver.quit()

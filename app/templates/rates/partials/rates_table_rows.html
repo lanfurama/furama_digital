@@ -39,8 +39,9 @@
 
       {% if cell.tooltip %}
       <!-- Tooltip -->
-      <div class="tooltip absolute z-50 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition
-                  bottom-full left-1/2 transform -translate-x-1/2 mt-1 w-72 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 shadow-lg text-sm p-3 rounded-lg">
+     <div class="tooltip absolute z-[999] invisible group-hover:visible opacity-0 group-hover:opacity-100 transition
+            bottom-full left-1/2 transform -translate-x-1/2 mt-1 w-72 bg-white dark:bg-neutral-800 
+            border border-gray-300 dark:border-neutral-600 shadow-lg text-sm p-3 rounded-lg">
         <table class="w-full text-xs text-left border-collapse">
           <thead>
             <tr class="border-b dark:border-neutral-700">
@@ -50,16 +51,16 @@
           </thead>
           <tbody>
             <tr>
-              <td class="py-1 dark:text-neutral-300">Today</td>
-              <td class="py-1 dark:text-neutral-300">{{ cell.latest }}</td>
+              <td class="py-1 dark:text-neutral-300">From ({{ cell.compare_date }})</td>
+              <td class="py-1 dark:text-neutral-300">{{ cell.compare }}</td>
             </tr>
             <tr>
               <td class="py-1 dark:text-neutral-300">Change</td>
               <td class="py-1 dark:text-neutral-300">{{ cell.change }}</td>
             </tr>
             <tr>
-              <td class="py-1 dark:text-neutral-300">Previous ({{ cell.compare_date }})</td>
-              <td class="py-1 dark:text-neutral-300">{{ cell.compare }}</td>
+              <td class="py-1 dark:text-neutral-300">To ({{ cell.latest_date }})</td>
+              <td class="py-1 dark:text-neutral-300">{{ cell.latest }}</td>
             </tr>
           </tbody>
         </table>
@@ -69,8 +70,5 @@
     {% endif %}
   </td>
   {% endfor %}
-
-  <!-- Updated Date -->
-  <td>{{ row.updated_date }}</td>
 </tr>
 {% endfor %}

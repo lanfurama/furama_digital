@@ -3,12 +3,16 @@ from django.http import HttpResponse
 from django.template.loader import render_to_string
 from app.models import DailyRate
 from datetime import timedelta, date
+from django.http import JsonResponse
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation
 import math
 from django.shortcuts import redirect
 from app.services.excel_importer import import_excel_file
 from django.contrib import messages
+from django.utils.dateparse import parse_date
+from datetime import datetime, timedelta, date
+from app.services.automation.lighthouse.fetch_rates import LighthouseRateFetcher
 
 # ========================
 # Utilities
@@ -25,6 +29,7 @@ def is_nan(value):
     return False
 
 def format_currency(value, is_percent=False):
+    # Định dạng số liệu để hiển thị ra frontend, tuỳ vào loại dữ liệu (giá tiền hoặc phần trăm)
     if is_nan(value):
         return "--"
     if value == -1:
@@ -36,38 +41,8 @@ def format_currency(value, is_percent=False):
     return f"{value:,.0f}₫"
 
 
-def get_compare_display(value, is_percent=False):
-    if value == -1:
-        return "Flex out"
-    if value == 0:
-        return "Sold out"
-    return format_currency(value, is_percent)
-
-
-def get_change_display(latest, compare, is_percent=False):
-    if compare == -1:
-        return "↗ từ Flex out"
-    if compare == 0:
-        return "↗ từ Sold out"
-    diff = latest - compare
-    return f"{diff:+,.1f}" + ("%" if is_percent else "₫")
-
-
-def get_trend_data(latest, compare):
-    if isinstance(compare, (int, float)) and compare > 0:
-        try:
-            percent = ((latest - compare) / compare) * 100
-            percent = max(min(percent, 100), -100)
-            return {
-                "percent": f"{int(percent):+d}%",
-                "trend": "up" if percent > 0 else "down"
-            }
-        except ZeroDivisionError:
-            return None
-    return None
-
-
-def create_cell(latest_value, compare_value, compare_date=None, is_percent=False):
+def create_cell(latest_value, compare_value, latest_date=None, compare_date=None, is_percent=False):
+    # Tạo dữ liệu cho từng ô trong bảng, bao gồm logic tính phần trăm chênh lệch và tooltip
     if latest_value is None or is_nan(latest_value):
         return {"display": "--"}
     if latest_value == 0:
@@ -85,9 +60,10 @@ def create_cell(latest_value, compare_value, compare_date=None, is_percent=False
             if percent:
                 data = {
                     "display": display,
-                    "percent": f"{int(percent):+d}%",
+                    "percent": f"{percent:+.1f}%",
                     "trend": "up" if percent > 0 else "down",
                     "latest": display,
+                    "latest_date": latest_date,
                     "compare": format_currency(compare_value, is_percent),
                     "change": f"{(latest_value - compare_value):+,.1f}" + ("%" if is_percent else "₫"),
                     "compare_date": compare_date.strftime("%d/%m/%Y") if compare_date else None,
@@ -131,20 +107,28 @@ COLUMNS = [
 # Data Processing
 # ========================
 
-def find_comparable_entry(latest, entries, comparison_days):
-    latest_date = latest.updated_date.date()
-    target_date = latest_date - timedelta(days=comparison_days)
+def find_comparable_entry(latest, entries, start_dt=None, end_dt=None):
+    # Danh sách ngày hợp lệ, đã sort giảm dần theo updated_date
+    sorted_entries = sorted(
+        [e for e in entries if e != latest],
+        key=lambda r: r.updated_date,
+        reverse=True
+    )
 
-    # Loại trừ bản mới nhất
-    candidates = [r for r in entries if r != latest and r.updated_date.date() < latest_date]
+    # Trường hợp có start_dt và end_dt từ request
+    if start_dt and end_dt:
+        candidates = [
+            e for e in sorted_entries
+            if start_dt <= e.updated_date <= end_dt
+        ]
+        return candidates[0] if candidates else None
 
-    if not candidates:
-        return None
+    # Nếu không có start và end, tự động chọn 2 bản gần nhất
+    for e in sorted_entries:
+        if e.updated_date < latest.updated_date:
+            return e
 
-    # Ưu tiên bản có ngày gần nhất với target_date (trong quá khứ)
-    candidates.sort(key=lambda r: abs((r.updated_date.date() - target_date).days))
-
-    return candidates[0]
+    return None
 
 
 def group_rates_by_reported_date(rates):
@@ -153,12 +137,12 @@ def group_rates_by_reported_date(rates):
         grouped[rate.reported_date].append(rate)
     return grouped
 
-def process_rate_row(report_date, entries, comparison_days):
+def process_rate_row(report_date, entries, start_dt=None, end_dt=None):
     entries.sort(key=lambda x: x.updated_date, reverse=True)
     latest = entries[0]
     date_status = "today" if report_date == date.today() else "future" if report_date > date.today() else "past"
 
-    compare = find_comparable_entry(latest, entries, comparison_days)
+    compare = find_comparable_entry(latest, entries, start_dt, end_dt)
 
     row = {
         "reported_date": report_date.strftime("%d/%m/%Y"),
@@ -175,6 +159,7 @@ def process_rate_row(report_date, entries, comparison_days):
         cell = create_cell(
             latest_value,
             compare_value,
+            latest.updated_date if latest else None,
             compare.updated_date if compare else None,
             is_percent
         )
@@ -182,24 +167,115 @@ def process_rate_row(report_date, entries, comparison_days):
 
     return row
 
+
+def get_date_range(request):
+    start_str = request.GET.get("start")
+    end_str = request.GET.get("end")
+
+    # Nếu có tham số start & end trong URL
+    if start_str and end_str:
+        return parse_date(start_str), parse_date(end_str)
+
+    # Lấy tất cả ngày có trong DB
+    updated_dates = DailyRate.objects.order_by("updated_date").values_list("updated_date", flat=True).distinct()
+    if not updated_dates:
+        today = date.today()
+        return today - timedelta(days=7), today
+
+    # Lấy ngày mới nhất
+    end = updated_dates.last().date()
+
+    # Tìm ngày gần nhất trước ngày mới nhất
+    dates_before = [d.date() for d in updated_dates if d.date() < end]
+    start = max(dates_before) if dates_before else end  # fallback nếu chỉ có 1 ngày
+
+    return start, end
+
+
+def build_comparison_rows(grouped_rates, start_dt, end_dt):
+    rows = []
+    today = date.today()
+
+    for report_date, entries in grouped_rates.items():
+        latest = find_latest_before(entries, end_dt)
+        compare = find_latest_before(entries, start_dt)
+
+        if not latest:
+            continue
+
+        row = {
+            "reported_date": report_date.strftime("%d/%m/%Y"),
+            "updated_date": latest.updated_date.strftime("%d/%m/%Y"),
+            "date_status": (
+                "today" if report_date == today
+                else "future" if report_date > today
+                else "past"
+            ),
+            "cells": [],
+        }
+
+        for field, _ in COLUMNS:
+            latest_value = getattr(latest, field, None)
+            compare_value = getattr(compare, field, 0) if compare else 0
+            is_percent = field in ["my_otb", "market_demand"]
+
+            cell = create_cell(
+                latest_value,
+                compare_value,
+                latest.updated_date.strftime("%d/%m/%Y"),
+                compare.updated_date if compare else None,
+                is_percent
+            )
+            row["cells"].append(cell)
+
+        rows.append(row)
+
+    return rows
+
+
+def find_latest_before(entries, target_dt):
+    candidates = [r for r in entries if r.updated_date <= target_dt]
+    return max(candidates, key=lambda r: r.updated_date) if candidates else None
+
+
+def get_lighthouse_rates(request):
+    # Gọi tự động fetch file từ Lighthouse và import
+    fetcher = LighthouseRateFetcher(headless=False)
+    try:
+        fetcher.login()
+        response = fetcher.fetch_rates()
+        return HttpResponse(response)
+    finally:
+        fetcher.close()
+
+
 # ========================
 # View
 # ========================
+def index(request):
+    # 1. Xử lý ngày bắt đầu và kết thúc
+    start_date, end_date = get_date_range(request)
+    print("Start:", start_date , "End:", end_date)
 
-def dashboard(request, comparison_period=7):
-    comparison_days = int(comparison_period)
-    rates = DailyRate.objects.order_by('reported_date')
+    # 2. Ép thành datetime để filter chính xác
+    start_dt = datetime.combine(start_date, datetime.min.time())
+    end_dt = datetime.combine(end_date, datetime.max.time())
+
+    # 3. Truy vấn dữ liệu
+    rates = DailyRate.objects.filter(updated_date__lte=end_dt).order_by("reported_date")[:200]
+    valid_dates = sorted(set(rate.updated_date.strftime('%Y-%m-%d') for rate in rates))
     grouped_rates = group_rates_by_reported_date(rates)
 
-    rows = [
-        process_rate_row(report_date, daily_entries, comparison_days)
-        for report_date, daily_entries in grouped_rates.items()
-    ]
+     # 4. Xử lý bảng
+    rows = build_comparison_rows(grouped_rates, start_dt, end_dt)
 
+    # 5. Tạo context
     context = {
         "rows": rows,
         "columns": COLUMNS,
-        "comparison_period": comparison_period
+        "start_date": start_date.strftime("%Y-%m-%d"),
+        "end_date": end_date.strftime("%Y-%m-%d"),
+        "valid_dates": valid_dates, 
     }
 
     if request.headers.get("HX-Request") == "true":
@@ -207,20 +283,3 @@ def dashboard(request, comparison_period=7):
         return HttpResponse(html)
 
     return render(request, "rates/index.html", context)
-
-def import_excel(request):
-    if request.method == "POST" and request.FILES.get("excel_file"):
-        excel_file = request.FILES["excel_file"]
-        try:
-            inserted, error = import_excel_file(excel_file)
-            if error:
-                messages.warning(request, error)
-            else:
-                messages.success(request, f"✅ Import thành công {inserted} dòng mới.")
-        except Exception as e:
-            print(f"❌ Lỗi khi import file: {e}")
-            messages.error(request, f"❌ Lỗi khi import file: {e}")
-    else:
-        messages.warning(request, "⚠️ Bạn chưa chọn file.")
-
-    return redirect("daily_rates_dashboard")

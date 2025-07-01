@@ -3,7 +3,8 @@ import pandas as pd
 from app.models import DailyRate
 from django.db import transaction
 from django.utils import timezone
-from datetime import timedelta
+from datetime import datetime, timedelta
+from django.db.models.functions import TruncDate
 
 # === Tên cột khách sạn mapping ===
 HOTEL_COLS = {
@@ -51,29 +52,63 @@ def clean_and_transform(df):
 
     return df
 
+# def insert_to_db(df):
+#     if df.empty:
+#         return "⚠️ File Excel không có dữ liệu hợp lệ."
+
+#     inserted = 0
+#     today = timezone.now()
+
+#     seven_days_ago = timezone.now() - timedelta(days=7)
+#     fouteen_days_ago = timezone.now() - timedelta(days=14)
+#     specific_date = datetime(2025, 6, 21, tzinfo=timezone.get_current_timezone())
+
+#     with transaction.atomic():
+#         for _, row in df.iterrows():
+#             reported_date = row["reported_date"].date()
+
+#             if DailyRate.objects.filter(reported_date=reported_date, updated_date=today).exists():
+#                 continue;
+
+#             record = {
+#                 "reported_date": reported_date,
+#                 "my_otb": row["my_otb"],
+#                 "market_demand": row["market_demand"],
+#                 "updated_date": today,
+#                 # "updated_date": specific_date
+#             }
+
+#             for excel_col, model_field in HOTEL_COLS.items():
+#                 record[model_field] = row.get(excel_col)
+
+#             DailyRate.objects.create(**record)
+#             inserted += 1
+
+#     return inserted, None  # Không lỗi
+
 def insert_to_db(df):
     if df.empty:
         return "⚠️ File Excel không có dữ liệu hợp lệ."
 
     inserted = 0
     today = timezone.now()
-    seven_days_ago = timezone.now() - timedelta(days=7)
-    fouteen_days_ago = timezone.now() - timedelta(days=14)
-
+    
     with transaction.atomic():
         for _, row in df.iterrows():
             reported_date = row["reported_date"].date()
 
-            if DailyRate.objects.filter(reported_date=reported_date, updated_date=today).exists():
-                continue;
+            # ✅ Bỏ qua nếu đã có cùng reported_date và updated_date là hôm nay
+            if DailyRate.objects.annotate(update_day=TruncDate("updated_date")).filter(
+                reported_date=reported_date,
+                update_day=today.date()
+            ).exists():
+                continue
 
             record = {
                 "reported_date": reported_date,
                 "my_otb": row["my_otb"],
                 "market_demand": row["market_demand"],
-                # "updated_date": today,
-                # "updated_date": seven_days_ago
-                "updated_date": fouteen_days_ago,  # Giả sử cập nhật lần này là 14 ngày trước
+                "updated_date": today,
             }
 
             for excel_col, model_field in HOTEL_COLS.items():
@@ -82,20 +117,7 @@ def insert_to_db(df):
             DailyRate.objects.create(**record)
             inserted += 1
 
-    return inserted, None  # Không lỗi
-
-# def import_excel_file(file_obj):
-#     try:
-#         df = pd.read_excel(file_obj, sheet_name="Rates", engine="openpyxl", skiprows=4, header=0)
-#         df = df.drop(columns=["Unnamed: 0"], errors="ignore")
-
-#         df_clean = clean_and_transform(df)
-#         print(df_clean)
-#         insert_to_db(df_clean)
-
-#     except Exception as e:
-#         print(f"❌ Lỗi khi xử lý file: {e}")
-#         raise
+    return inserted, None
 
 def import_excel_file(file_obj):
     df = pd.read_excel(file_obj, sheet_name="Rates", engine="openpyxl", skiprows=4, header=0)

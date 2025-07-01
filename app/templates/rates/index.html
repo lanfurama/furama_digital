@@ -4,6 +4,9 @@
 
 {% block extra_head %}
   <style>
+    body{
+      overflow: hidden;
+    }
     thead th {
       position: sticky;
       top: 0;
@@ -13,7 +16,7 @@
 
     tbody#ratesTableBody {
       display: block;
-      max-height: 600px;
+      max-height: 500px;
       overflow-y: auto;
     }
 
@@ -22,121 +25,174 @@
       display: table;
       width: 100%;
       table-layout: fixed;
-    }
-
-    .percentage-cell {
-      position: relative;
-      cursor: pointer;
-    }
-
-    .tooltip {
-      visibility: hidden;
-      position: absolute;
-      bottom: 125%;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 999;
-      opacity: 0;
-      transition: opacity 0.2s;
-      background: #f9f9f9;
-      border: 1px solid #ccc;
-      padding: 8px;
-      width: 300px;
-      font-size: 14px;
-      border-radius: 6px;
-    }
-
-    .percentage-cell:hover .tooltip {
-      visibility: visible;
-      opacity: 1;
-    }
+    }  
   </style>
 {% endblock %}
 
 {% block content %}
-      <h2 class="text-2xl font-bold mb-6">Rates</h2>
+    <!-- 👇 So sánh theo ngày cập nhật -->
+<div x-data="litepickerSeparate({{ valid_dates|safe }}, '{{ start_date }}', '{{ end_date }}')" x-init="init()" class="mt-6 space-y-4">
 
-      <!-- Buttons -->
-      <div class="flex items-center justify-between flex-wrap gap-4 mt-4" x-data="{ active: 7 }">
-      <!-- Nút chọn khoảng thời gian -->
-      <div class="flex items-center gap-2">
-        <button
-          :class="active === 7 ? 'bg-black text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'"
-          @click="active = 7"
-          hx-get="{% url 'compare_dashboard' comparison_period=7 %}"
-          hx-target="#ratesTableBody"
-          class="px-4 py-2 rounded-md text-sm font-medium transition"
-        >
-          vs. 7 days ago
-        </button>
+  <!-- Tiêu đề -->
+  <div class="flex items-center gap-2 text-lg font-semibold text-gray-800">
+    <span>Compare Rates by <span class="text-blue-600">Updated Date</span></span>
+  </div>
 
-        <button
-          :class="active === 14 ? 'bg-black text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'"
-          @click="active = 14"
-          hx-get="{% url 'compare_dashboard' comparison_period=14 %}"
-          hx-target="#ratesTableBody"
-          class="px-4 py-2 rounded-md text-sm font-medium transition"
-        >
-          vs. 14 days ago
-        </button>
-      </div>
+  <!-- Ngày được chọn hiển thị rõ ràng -->
+  <template x-if="start && end">
+    <div class="flex items-center gap-2 text-sm text-white bg-black border border-gray-700 rounded-md px-4 py-2 w-fit shadow-sm mt-[30px]">
+      <span class="text-gray-400">Comparing:</span>
+      <span class="font-medium text-blue-400" x-text="start"></span>
+      <span class="text-gray-500">→</span>
+      <span class="font-medium text-green-400" x-text="end"></span>
+    </div>
+  </template>
 
-      <!-- Nút Import và Refresh bên phải -->
-      <div class="flex items-center gap-3">
-        <!-- IMPORT -->
-        <form action="{% url 'import_excel' %}" method="post" enctype="multipart/form-data" class="relative">
-          {% csrf_token %}
-          <input id="excelFile" type="file" name="excel_file" accept=".xlsx" class="hidden" onchange="this.form.submit()">
-          <label for="excelFile"
-                class="cursor-pointer flex items-center gap-1 px-3 py-2 bg-green-700 text-white text-sm rounded-md">
-            Import Excel File
-          </label>
-        </form>
-
-        <!-- REFRESH -->
-        <button
-          hx-get="{% url 'compare_dashboard' comparison_period=7 %}"
-          hx-target="#ratesTableBody"
-          class="flex items-center gap-1 px-3 py-2 rounded-md text-sm font-medium bg-black text-white"
-        >
-          Refresh
-        </button>
+  <!-- Bộ chọn ngày -->
+  <div class="flex flex-wrap gap-6 items-end">
+    <!-- Ngày cũ hơn -->
+    <div class="flex flex-col">
+      <label class="text-sm font-medium mb-1 text-gray-700">Compare with (Older Date)</label>
+      <div class="relative">
+        <input x-ref="fromInput"
+              type="text"
+              class="border border-gray-300 pl-10 pr-4 py-2 rounded-md text-sm w-52 bg-white cursor-pointer shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Select older date"
+              readonly>
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+          📅
+        </div>
       </div>
     </div>
 
-      <!-- Table -->
-      <div class="relative mt-6" x-data="{ loading: false }"
-           x-init="() => {
-             document.body.addEventListener('htmx:beforeRequest', () => loading = true);
-             document.body.addEventListener('htmx:afterRequest', () => loading = false);
-           }">
-
-        <!-- Loader overlay -->
-        <div x-show="loading" class="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center z-20">
-          <div class="text-gray-700 text-lg font-medium animate-pulse">Loading...</div>
-        </div>
-
-        <div class="overflow-hidden border rounded-lg shadow bg-white">
-          <table class="w-full text-sm text-left table-auto">
-            <thead class="bg-gray-100 dark:bg-neutral-700 border-b">
-              <tr>
-                <th class="p-3 font-semibold">Report Date</th>
-                {% for col_key, col_label in columns %}
-                  <th class="p-3 font-semibold">{{ col_label }}</th>
-                {% endfor %}
-                <th class="p-3 font-semibold">Updated Date</th>
-              </tr>
-            </thead>
-
-            <tbody id="ratesTableBody"
-                   hx-get="{% url 'compare_dashboard' comparison_period=7 %}"
-                   hx-trigger="load"
-                   hx-target="#ratesTableBody"
-                   class="divide-y">
-              {% include "rates/partials/rates_table_rows.html" %}
-            </tbody>
-          </table>
+    <!-- Ngày mới hơn -->
+    <div class="flex flex-col">
+      <label class="text-sm font-medium mb-1 text-gray-700">Compare to (Latest Date)</label>
+      <div class="relative">
+        <input x-ref="toInput"
+              type="text"
+              class="border border-gray-300 pl-10 pr-4 py-2 rounded-md text-sm w-52 bg-white cursor-pointer shadow-sm focus:ring-green-500 focus:border-green-500"
+              placeholder="Select latest date"
+              readonly>
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+          📅
         </div>
       </div>
+    </div>
+  </div>
+
+</div>
+
+
+
+    </div>
+
+  <!-- Table -->
+  <div class="overflow-hidden border rounded-lg shadow bg-white mt-4">
+    <table class="w-full text-sm text-left table-auto">
+      <thead class="bg-gray-100 dark:bg-neutral-700 border-b">
+        <tr>
+          <th class="p-3 font-semibold">Reported Date</th>
+          {% for col_key, col_label in columns %}
+            <th class="p-3 font-semibold">{{ col_label }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+
+      <tbody id="ratesTableBody"
+             hx-get="{% url 'rates' %}?start_date={{ start_date }}&end_date={{ end_date }}&page=1"
+             hx-trigger="load"
+             hx-target="#ratesTableBody"
+             class="divide-y" >
+        {% include "rates/partials/rates_table_rows.html" %}
+      </tbody>
+    </table>
+  </div>
+
+<script>
+  function litepickerSeparate(validDates, defaultStart, defaultEnd) {
+  return {
+    start: defaultStart,
+    end: defaultEnd,
+
+      init() {
+        const self = this;
+        const validSet = new Set(validDates);
+
+        const disableDates = (date) => {
+          const d = date.toISOString().split('T')[0];
+          return !validSet.has(d);
+        };
+
+        // Init "From Date"
+        new Litepicker({
+          element: this.$refs.fromInput,
+          format: 'YYYY-MM-DD',
+          autoApply: true,
+          singleMode: true,
+          lockDays: this.getInvalidDays(validDates),
+          setup: (picker) => {
+            picker.on('selected', (date) => {
+              const str = date.format('YYYY-MM-DD');
+              if (validSet.has(str)) {
+                self.start = str;
+                self.$refs.fromInput.value = str;
+                self.maybeFetch();
+              } else {
+                self.$refs.fromInput.value = '';
+                self.start = null;
+              }
+            });
+          }
+        });
+
+        // Init "To Date"
+        new Litepicker({
+          element: this.$refs.toInput,
+          format: 'YYYY-MM-DD',
+          autoApply: true,
+          singleMode: true,
+          lockDays: this.getInvalidDays(validDates),
+          setup: (picker) => {
+            picker.on('selected', (date) => {
+              const str = date.format('YYYY-MM-DD');
+              if (validSet.has(str)) {
+                self.end = str;
+                self.$refs.toInput.value = str; 
+                self.maybeFetch();
+              } else {
+                self.$refs.toInput.value = '';
+                self.end = null;
+              }
+            });
+          }
+        });
+      },
+
+      getInvalidDays(validDates) {
+        const validSet = new Set(validDates);
+        const start = new Date("2024-01-01");
+        const end = new Date("2026-12-31");
+        const invalid = [];
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const str = d.toISOString().split('T')[0];
+          if (!validSet.has(str)) {
+            invalid.push(str);
+          }
+        }
+        return invalid;
+      },
+
+      maybeFetch() {
+        if (this.start && this.end) {
+          const params = new URLSearchParams({ start: this.start, end: this.end }).toString();
+          htmx.ajax('GET', `{% url 'rates' %}?${params}`, {
+            target: '#ratesTableBody'
+          });
+        }
+      }
+    };
+  }
+</script>
 
       {% endblock %}

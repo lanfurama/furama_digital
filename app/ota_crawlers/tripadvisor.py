@@ -5,25 +5,26 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from .base_crawler import BaseCrawler
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
-class BookingCrawler(BaseCrawler):
+class TripAdvisorCrawler(BaseCrawler):
     def __init__(self):
-        self.source = "booking"
-        self.headers = {"User-Agent": "Mozilla/5.0"}
+        self.source = "tripadvisor"
+        self.headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Connection": "keep-alive",
+        }
 
-        urls = [
-            "https://www.booking.com/hotel/vn/furama-resort-danang.html",
-            "https://www.booking.com/hotel/vn/fusion-maia-danang.html",
-            "https://www.booking.com/hotel/vn/danang-beach-resort.html",
-            "https://www.booking.com/hotel/vn/premier-village-danang-resort.html",
-            "https://www.booking.com/hotel/vn/da-nang-marriott-resort.html",
-            "https://www.booking.com/hotel/vn/hyatt-regency-danang-resort-and-spa.html",
-            "https://www.booking.com/hotel/vn/naman-retreat.html",
-            "https://www.booking.com/hotel/vn/furama-villas-danang.html",
-            "https://www.booking.com/hotel/vn/sheraton-grand-danang-resort.html",
-            "https://www.booking.com/hotel/vn/fusion-resort-and-villas-da-nang.html"
+        self.urls = [
+            "https://www.tripadvisor.com.vn/Hotel_Review-g298085-d302750-Reviews-Furama_Resort_Danang-Da_Nang.html",
         ]
-        self.urls = urls
+        
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        self.driver = webdriver.Chrome(options=chrome_options)
 
     def extract_resort_name(self, url):
         try:
@@ -54,6 +55,7 @@ class BookingCrawler(BaseCrawler):
 
     def extract_total_reviews(self, text):
         for pattern in [
+            r"([\d,]+)\s+đánh giá"
             r"Based on\s+([\d,]+)\s+đánh giá",
             r"([\d,]+)\s+reviews"
         ]:
@@ -82,7 +84,14 @@ class BookingCrawler(BaseCrawler):
     def crawl(self, url):
         print(f"🌐 Crawling: {url}")
         try:
-            html = requests.get(url, headers=self.headers, timeout=20).text
+            # html = requests.get(url, headers=self.headers, timeout=20).text
+            # Sử dụng Selenium để tải trang và lấy nội dung
+            self.driver.get(url)
+
+            # Đợi trang tải đầy đủ (có thể cần điều chỉnh thời gian)
+            self.driver.implicitly_wait(10)  # seconds
+            html = self.driver.page_source
+            self.driver.quit()  # 🧹 Quan trọng: đóng driver đúng lúc
             soup = BeautifulSoup(html, "html.parser")
             text = soup.get_text(separator="\n")
 
