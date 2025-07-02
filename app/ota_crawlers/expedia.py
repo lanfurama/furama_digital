@@ -18,22 +18,10 @@ from selenium.webdriver.common.action_chains import ActionChains
 class ExpediaCrawler(BaseCrawler):
     def __init__(self):
         self.source = "expedia"
-        self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Connection": "keep-alive",
-        }
-        self.urls = [
+        urls = [
             "https://www.expedia.com/Da-Nang-Hotels-Furama-Resort-Danang.h526011.Hotel-Information",
         ]
-
-         # Cấu hình Selenium để không mở giao diện trình duyệt
-        chrome_options = Options()
-        # chrome_options.add_argument("--headless")
-        # ✅ Chỉ định đường dẫn đến Cốc Cốc
-        chrome_options.binary_location = "C:\\Program Files\\CocCoc\\Browser\\Application\\browser.exe"
-        self.driver = webdriver.Chrome(options=chrome_options)
+        super().__init__(urls=urls, use_selenium=True)
 
     def extract_resort_name(self, soup):
         h1_tag = soup.find('h1', class_='uitk-heading uitk-heading-3')
@@ -43,15 +31,21 @@ class ExpediaCrawler(BaseCrawler):
         else:   
             return "unknown"
 
-    def extract_rating(self, html_content):
-        soup = BeautifulSoup(html_content, 'html.parser')
-        div_tag = soup.find('div', class_='uitk-text uitk-type-900 uitk-text-default-theme')
-        if div_tag:
-            text = div_tag.get_text(strip=True)
-            match = re.search(r"(\d\.\d)", text)
-            return float(match.group(1)) if match else None
-        else:
-            return None
+    # def extract_rating(self, text):
+    #     text = " ".join(text.split())  # chuẩn hóa lại khoảng trắng và xuống dòng
+    #     match = re.search(r"(\d+(?:\.\d+)?)\s*out of\s*10", text, re.IGNORECASE)
+    #     return float(match.group(1)) if match else None
+    
+    def extract_rating(self, soup):
+        possible_tags = soup.find_all(string=re.compile(r"(\d+(?:\.\d+)?)\s*out of\s*10"))
+        for tag in possible_tags:
+            m = re.search(r"(\d+(?:\.\d+)?)\s*out of\s*10", tag)
+            if m:
+                try:
+                    return m.group(1)
+                except ValueError:
+                    continue
+        return None
 
     def extract_total_reviews(self, text):
         for pattern in [
@@ -65,85 +59,61 @@ class ExpediaCrawler(BaseCrawler):
 
     def extract_breakdown(self, soup):
         data = {}
-        score_blocks = soup.select("div.Review-travelerCell--right")
-        for block in score_blocks:
-            label_elem = block.select_one(".sc-hKgILt")
-            score_elem = block.select_one(".kkDVzi")
-            if label_elem and score_elem:
-                key = label_elem.text.strip().lower().replace(" ", "_")
-                try:
-                    score = float(score_elem.text.strip())
-                    data[key] = score
-                except:
-                    continue
+
+        blocks = soup.select("div.uitk-layout-flex-flex-direction-column")
+        for block in blocks:
+            score_tag = block.select_one("h3[aria-label]")
+            label_tag = block.select_one("div.uitk-text.uitk-type-300")
+
+            if score_tag and label_tag:
+                label = label_tag.text.strip().lower().replace(" ", "_")
+                aria = score_tag.get("aria-label", "")
+                match = re.search(r"(\d+(?:\.\d+)?)", aria)
+                if match:
+                    try:
+                        score = float(match.group(1))
+                        data[label] = score
+                    except ValueError:
+                        continue
         return data
+    
+    def scroll_until_reviews(self, max_scrolls=20, pause=1):
+        for _ in range(max_scrolls):
+            try:
+                review_section = self.driver.find_element(By.CSS_SELECTOR, "section#Reviews")
+                return review_section  # ✅ Đã tìm thấy
+            except:
+                self.driver.execute_script("window.scrollBy(0, window.innerHeight);")  # cuộn xuống 1 khung hình
+                sleep(pause)
+        return None  # ❌ Sau max_scrolls vẫn không thấy
 
     def crawl(self, url):
         print(f"🌐 Crawling: {url}")
-        self.driver.implicitly_wait(15)
-        self.driver.get(url)
+        try:
+            self.driver.get(url)
+            sleep(2)
 
-        while True:
-                sleep(3)  # Đợi một chút để trang tải
-                try:
-                    review_button = WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, '[data-stid="reviews-link"]'))
-                    )
-                    
-                    # Scroll và click bằng ActionChains
-                    actions = ActionChains(self.driver)
-                    actions.move_to_element(review_button).pause(1).click().perform()
-                    sleep(3)  # Đợi trang review tải
+            review_section = self.scroll_until_reviews()
+            self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", review_section)
+            sleep(2)
 
-                    # Tìm container review
-                    html = self.driver.page_source
-                    # Lấy toàn bộ text trong div
-                    soup = BeautifulSoup(html, "html.parser")
-                    text = soup.get_text(separator="\n")
+            soup = BeautifulSoup(self.driver.page_source, "html.parser")
+            text = soup.get_text(separator="\n")
 
-                    resort = self.extract_resort_name(soup)
-                    rating = self.extract_rating(text)
-                    total_reviews = self.extract_total_reviews(text)
-                    breakdown = self.extract_breakdown(soup)
+            resort = self.extract_resort_name(soup)
+            rating = self.extract_rating(soup)
+            total_reviews = self.extract_total_reviews(text)
+            breakdown = self.extract_breakdown(soup)
 
-                    return {
-                        "resort": resort,
-                        "url": url,
-                        "source": self.source,
-                        "rating": rating,
-                        "total_reviews": total_reviews,
-                        "scores": breakdown
-                    }
-                
-                    self.driver.quit()
+            return {
+                "resort": resort,
+                "url": url,
+                "source": self.source,
+                "rating": rating,
+                "total_reviews": total_reviews,
+                "scores": breakdown
+            }
 
-                except TimeoutException:
-                    print("Không tìm thấy nút review trong thời gian cho phép.")
-                except Exception as e:
-                    print("Lỗi khi click nút review:", e)
-
-            # Lấy HTML của trang
-            # html = self.driver.page_source
-        self.driver.quit() 
-            # return html
-        #     soup = BeautifulSoup(html, "html.parser")
-        #     text = soup.get_text(separator="\n")
-
-        #     resort = self.extract_resort_name(soup)
-        #     rating = self.extract_rating(text)
-        #     total_reviews = self.extract_total_reviews(text)
-        #     breakdown = self.extract_breakdown(soup)
-
-        #     return {
-        #         "resort": resort,
-        #         "url": url,
-        #         "source": self.source,
-        #         "rating": rating,
-        #         "total_reviews": total_reviews,
-        #         "scores": breakdown
-        #     }
-        
-    def __del__(self):
-        if self.driver:
-            self.driver.quit()
+        except Exception as e:
+            return {"url": url, "error": str(e)}
 

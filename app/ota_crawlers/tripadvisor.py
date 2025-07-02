@@ -1,39 +1,19 @@
 # reviews/crawlers/booking.py
 
 import re
-import requests
-from bs4 import BeautifulSoup
-from urllib.parse import urlparse
 from .base_crawler import BaseCrawler
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 
 class TripAdvisorCrawler(BaseCrawler):
     def __init__(self):
-        self.source = "tripadvisor"
-        self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Connection": "keep-alive",
-        }
-
-        self.urls = [
+        urls = [
             "https://www.tripadvisor.com.vn/Hotel_Review-g298085-d302750-Reviews-Furama_Resort_Danang-Da_Nang.html",
         ]
-        
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        self.driver = webdriver.Chrome(options=chrome_options)
+        self.source = "tripadvisor"
+        super().__init__(urls=urls, use_selenium=True)
 
-    def extract_resort_name(self, url):
+    def extract_resort_name(self, soup):
         try:
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()  # Raise error nếu mã status không phải 200
-
-            soup = BeautifulSoup(response.text, 'html.parser')
             header_tag = soup.find('h2', class_=lambda x: x and 'pp-header__title' in x)
-
             if header_tag:
                 return header_tag.get_text(strip=True)
             else:
@@ -84,15 +64,7 @@ class TripAdvisorCrawler(BaseCrawler):
     def crawl(self, url):
         print(f"🌐 Crawling: {url}")
         try:
-            # html = requests.get(url, headers=self.headers, timeout=20).text
-            # Sử dụng Selenium để tải trang và lấy nội dung
-            self.driver.get(url)
-
-            # Đợi trang tải đầy đủ (có thể cần điều chỉnh thời gian)
-            self.driver.implicitly_wait(10)  # seconds
-            html = self.driver.page_source
-            self.driver.quit()  # 🧹 Quan trọng: đóng driver đúng lúc
-            soup = BeautifulSoup(html, "html.parser")
+            soup = self.get_soup(url)
             text = soup.get_text(separator="\n")
 
             resort = self.extract_resort_name(url)
@@ -111,3 +83,5 @@ class TripAdvisorCrawler(BaseCrawler):
 
         except Exception as e:
             return {"url": url, "error": str(e)}
+        finally:
+            self.close()

@@ -2,33 +2,28 @@
 
 import re
 import logging
-import requests
-from bs4 import BeautifulSoup
-from urllib.parse import urlparse
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.by import By
-from time import sleep
 from .base_crawler import BaseCrawler
+from multiprocessing import Pool
 
 logger = logging.getLogger(__name__)
 
 class AgodaCrawler(BaseCrawler):
     def __init__(self):
         self.source = "agoda"
-        self.urls = [
+        urls = [
             "https://www.agoda.com/furama-resort-danang/hotel/da-nang-vn.html",
-            "https://www.agoda.com/aoa-hotel-apartment-da-nang-by-thg/hotel/all/da-nang-vn.html?"
+            "https://www.agoda.com/fusion-maia-resort-all-spa-inclusive/hotel/da-nang-vn.html",
+            "https://www.agoda.com/pullman-danang-beach-resort/hotel/da-nang-vn.html",
+            "https://www.agoda.com/premier-village-danang-resort-managed-by-accor-hotels/hotel/da-nang-vn.html",
+            "https://www.agoda.com/danang-marriott-resort-spa-non-nuoc-beach-villas/hotel/da-nang-vn.html",
+            "https://www.agoda.com/hyatt-regency-danang-resort-and-spa/hotel/da-nang-vn.html",
+            "https://www.agoda.com/naman-retreat-resort/hotel/da-nang-vn.html",
+            "https://www.agoda.com/furama-villas-danang/hotel/da-nang-vn.html",
+            "https://www.agoda.com/sheraton-grand-danang-resort/hotel/da-nang-vn.html",
+            "https://www.agoda.com/fusion-resort-and-villas-da-nang/hotel/da-nang-vn.html"
         ]
-
-    def _init_driver(self):
-        options = Options()
-        options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36")
-        options.add_argument("start-maximized")
-        options.add_experimental_option("detach", True)
-        options.add_argument("--headless")  # Bật nếu chạy background
-        return webdriver.Chrome(options=options)
+        super().__init__(urls=urls, use_selenium=True)
 
     def extract_resort_name(self, url):
         match = re.search(r'agoda\.com/(?:vi-vn/)?([^/]+)/hotel/', url)
@@ -70,13 +65,9 @@ class AgodaCrawler(BaseCrawler):
         return data
 
     def crawl(self, url):
-        driver = self._init_driver()
+        print(f"🌐 Crawling: {url}")
         try:
-            driver.implicitly_wait(15)
-            driver.get(url)
-
-            html = driver.page_source
-            soup = BeautifulSoup(html, "html.parser")
+            soup = self.get_soup(url)
             text = soup.get_text(separator="\n")
 
             resort = self.extract_resort_name(url)
@@ -95,6 +86,17 @@ class AgodaCrawler(BaseCrawler):
 
         except Exception as e:
             logger.error(f"[{self.source.upper()}] Lỗi khi crawl {url}: {str(e)}", exc_info=True)
-            return None  # hoặc raise e nếu muốn báo lỗi ở API
+            return {"url": url, "error": str(e)}
         finally:
-            driver.quit()
+            self.close()
+
+    # @staticmethod
+    # def _crawl_url_static(url):
+    #     crawler = AgodaCrawler()
+    #     result = crawler.crawl(url)
+    #     return result
+
+    # def crawl_all_parallel(self, processes=4):
+    #     with Pool(processes=processes) as pool:
+    #         results = pool.map(self._crawl_url_static, self.urls)
+    #     return results

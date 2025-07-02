@@ -21,8 +21,8 @@ def crawl_hotel_reviews(request):
     crawlers = [
         # HotelsCombinedCrawler(),
         # BookingCrawler()
-        AgodaCrawler()
-        # ExpediaCrawler()
+        # AgodaCrawler()
+        ExpediaCrawler()
         # TripAdvisorCrawler()
     ]
     

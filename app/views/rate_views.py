@@ -245,17 +245,6 @@ def find_latest_before(entries, target_dt):
     return max(candidates, key=lambda r: r.updated_date) if candidates else None
 
 
-def get_lighthouse_rates(request):
-    # Gọi tự động fetch file từ Lighthouse và import
-    fetcher = LighthouseRateFetcher(headless=False)
-    try:
-        fetcher.login()
-        response = fetcher.fetch_rates()
-        return HttpResponse(response)
-    finally:
-        fetcher.close()
-
-
 # ========================
 # View
 # ========================
@@ -278,6 +267,7 @@ def index(request):
     # 3. Truy vấn dữ liệu
     rates = DailyRate.objects.filter(updated_date__lte=end_dt, reported_date__year=year, reported_date__month=month).order_by("reported_date")
     valid_dates = sorted(set(rate.updated_date.strftime('%Y-%m-%d') for rate in rates))
+    print("Valid dates:", valid_dates)
     grouped_rates = group_rates_by_reported_date(rates)
 
      # 4. Xử lý bảng

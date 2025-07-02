@@ -132,6 +132,7 @@
       init() {
         const self = this;
         const validSet = new Set(validDates);
+        console.log("Valid dates:", validSet);
 
         const disableDates = (date) => {
           const d = date.toISOString().split('T')[0];
@@ -215,6 +216,8 @@
         htmx.ajax('GET', url, {
             target: '#ratesTableBody', 
         });
+        // const picker = litepickerSeparate(validDates, defaultStart, defaultEnd);
+        // picker.init();
     }
 }
 </script>

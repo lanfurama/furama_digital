@@ -3,14 +3,11 @@
 import re
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse
 from .base_crawler import BaseCrawler
 
 class BookingCrawler(BaseCrawler):
     def __init__(self):
         self.source = "booking"
-        self.headers = {"User-Agent": "Mozilla/5.0"}
-
         urls = [
             "https://www.booking.com/hotel/vn/furama-resort-danang.html",
             "https://www.booking.com/hotel/vn/fusion-maia-danang.html",
@@ -23,7 +20,7 @@ class BookingCrawler(BaseCrawler):
             "https://www.booking.com/hotel/vn/sheraton-grand-danang-resort.html",
             "https://www.booking.com/hotel/vn/fusion-resort-and-villas-da-nang.html"
         ]
-        self.urls = urls
+        super().__init__(urls=urls, use_selenium=False)
 
     def extract_resort_name(self, url):
         try:
@@ -82,8 +79,7 @@ class BookingCrawler(BaseCrawler):
     def crawl(self, url):
         print(f"🌐 Crawling: {url}")
         try:
-            html = requests.get(url, headers=self.headers, timeout=20).text
-            soup = BeautifulSoup(html, "html.parser")
+            soup = self.get_soup(url)
             text = soup.get_text(separator="\n")
 
             resort = self.extract_resort_name(url)

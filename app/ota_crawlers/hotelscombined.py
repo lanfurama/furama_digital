@@ -1,16 +1,11 @@
 # reviews/crawlers/hotelscombined.py
 
 import re
-import requests
-from bs4 import BeautifulSoup
-from urllib.parse import urlparse
 from .base_crawler import BaseCrawler
 
 class HotelsCombinedCrawler(BaseCrawler):
     def __init__(self):
         self.source = "hotelscombined"
-        self.headers = {"User-Agent": "Mozilla/5.0"}
-
         urls = [
             "https://www.hotelscombined.com/hotels/Furama-Resort-Danang,Da-Nang-p17850-h2259-details",
             "https://www.hotelscombined.com/hotels/Tia-Wellness-Resort,Spa-Inclusive,Da-Nang-p17850-h367310-details",
@@ -22,7 +17,7 @@ class HotelsCombinedCrawler(BaseCrawler):
             "https://www.hotelscombined.com/hotels/Sheraton-Grand-Danang-Beach-Resort--SPA,Da-Nang-p17850-h3602259-details",
             "https://www.hotelscombined.com/hotels/Fusion-Resort-and-Villas-Da-Nang,Da-Nang-p17850-h9260634-details"
         ]
-        self.urls = urls
+        super().__init__(urls=urls, use_selenium=False)
 
     def extract_resort_name(self, url):
         match = re.search(r'hotels/([^,]+)', url)
@@ -34,7 +29,7 @@ class HotelsCombinedCrawler(BaseCrawler):
             return "unknown"
 
     def extract_rating(self, soup):
-        div_tag = soup.find('div', attrs={'data-automation': 'bubbleRatingValue'})
+        div_tag = soup.find('span', attrs={'class': 'YlEV-rating-score'})
         if div_tag:
             text = div_tag.get_text(strip=True)
             try:
@@ -72,10 +67,8 @@ class HotelsCombinedCrawler(BaseCrawler):
     def crawl(self, url):
         print(f"🌐 Crawling: {url}")
         try:
-            html = requests.get(url, headers=self.headers, timeout=20).text
-            soup = BeautifulSoup(html, "html.parser")
+            soup = self.get_soup(url)
             text = soup.get_text(separator="\n")
-
             resort = self.extract_resort_name(url)
             rating = self.extract_rating(soup)
             total_reviews = self.extract_total_reviews(text)
