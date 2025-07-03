@@ -1,4 +1,4 @@
-# reviews/crawlers/hotelscombined.py
+# reviews/crawlers/expedia.py
 
 import re
 import requests
@@ -10,16 +10,22 @@ from selenium.webdriver.chrome.options import Options
 import time
 from time import sleep
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.common.action_chains import ActionChains
 
 class ExpediaCrawler(BaseCrawler):
     def __init__(self):
         self.source = "expedia"
         urls = [
             "https://www.expedia.com/Da-Nang-Hotels-Furama-Resort-Danang.h526011.Hotel-Information",
+            "https://www.expedia.com/Da-Nang-Hotels-TIA-Wellness-Resort-Spa-Inclusive.h3844044.Hotel-Information",
+            "https://www.expedia.com/Da-Nang-Hotels-Pullman-Danang-Beach-Resort.h3520339.Hotel-Information",
+            "https://www.expedia.com/Phu-Quoc-Hotels-Premier-Village-Phu-Quoc-Resort-Managed-By-AccorHotels.h22862139.Hotel-Information",
+            "https://www.expedia.com/Da-Nang-Hotels-Danang-Marriott-Resort-Spa.h27825698.Hotel-Information",
+            "https://www.expedia.com/Da-Nang-Hotels-Hyatt-Regency-Danang-Resort-And-Spa.h4624340.Hotel-Information",
+            "https://www.expedia.com/Da-Nang-Hotels-Naman-Retreat.h9713657.Hotel-Information",
+            "https://www.expedia.com/Da-Nang-Hotels-Furama-Villas-Danang.h8508851.Hotel-Information",
+            "https://www.expedia.com/Da-Nang-Hotels-Sheraton-Grand-Danang-Resort.h21943289.Hotel-Information",
+            "https://www.expedia.com/Da-Nang-Hotels-Fusion-Resort-Villas-Da-Nang.h99047995.Hotel-Information"
         ]
         super().__init__(urls=urls, use_selenium=True)
 
@@ -30,11 +36,7 @@ class ExpediaCrawler(BaseCrawler):
             return resort_name
         else:   
             return "unknown"
-
-    # def extract_rating(self, text):
-    #     text = " ".join(text.split())  # chuẩn hóa lại khoảng trắng và xuống dòng
-    #     match = re.search(r"(\d+(?:\.\d+)?)\s*out of\s*10", text, re.IGNORECASE)
-    #     return float(match.group(1)) if match else None
+        
     
     def extract_rating(self, soup):
         possible_tags = soup.find_all(string=re.compile(r"(\d+(?:\.\d+)?)\s*out of\s*10"))
@@ -77,7 +79,7 @@ class ExpediaCrawler(BaseCrawler):
                         continue
         return data
     
-    def scroll_until_reviews(self, max_scrolls=20, pause=1):
+    def scroll_until_reviews(self, max_scrolls=20, pause=0.5):
         for _ in range(max_scrolls):
             try:
                 review_section = self.driver.find_element(By.CSS_SELECTOR, "section#Reviews")
@@ -89,9 +91,12 @@ class ExpediaCrawler(BaseCrawler):
 
     def crawl(self, url):
         print(f"🌐 Crawling: {url}")
+        self.create_driver()  # Tạo driver nếu chưa có
+        if not self.driver:
+            raise Exception("Selenium driver is not initialized.")
         try:
             self.driver.get(url)
-            sleep(2)
+            sleep(1)
 
             review_section = self.scroll_until_reviews()
             self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", review_section)

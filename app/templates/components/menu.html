@@ -21,9 +21,9 @@
         </a>
 
         <!-- ✏️ Menu Item 2 -->
-        <a href="{% url 'ota_review_crawler' %}"
-          class="font-medium text-[15px] {% if request.resolver_match.view_name == 'ota_review_crawler' %}text-blue-500{% else %}text-gray-600 hover:text-gray-400 dark:text-neutral-400 dark:hover:text-neutral-500{% endif %} focus:outline-none"
-          aria-current="{% if request.resolver_match.view_name == 'ota_review_crawler' %}page{% else %}false{% endif %}">
+        <a href="{% url 'ota' %}"
+          class="font-medium text-[15px] {% if request.resolver_match.view_name == 'ota' %}text-blue-500{% else %}text-gray-600 hover:text-gray-400 dark:text-neutral-400 dark:hover:text-neutral-500{% endif %} focus:outline-none"
+          aria-current="{% if request.resolver_match.view_name == 'ota' %}page{% else %}false{% endif %}">
           OTA Comparison
         </a>
 

@@ -75,6 +75,8 @@ class AgodaCrawler(BaseCrawler):
             total_reviews = self.extract_total_reviews(text)
             breakdown = self.extract_breakdown(soup)
 
+            self.driver.quit()  # Đóng trình duyệt sau khi lấy dữ liệu
+
             return {
                 "resort": resort,
                 "url": url,
@@ -89,14 +91,3 @@ class AgodaCrawler(BaseCrawler):
             return {"url": url, "error": str(e)}
         finally:
             self.close()
-
-    # @staticmethod
-    # def _crawl_url_static(url):
-    #     crawler = AgodaCrawler()
-    #     result = crawler.crawl(url)
-    #     return result
-
-    # def crawl_all_parallel(self, processes=4):
-    #     with Pool(processes=processes) as pool:
-    #         results = pool.map(self._crawl_url_static, self.urls)
-    #     return results

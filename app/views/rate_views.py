@@ -199,10 +199,10 @@ def build_comparison_rows(grouped_rates, start_dt, end_dt, month_str=None):
     today = date.today()
 
     for report_date, entries in grouped_rates.items():
-        if month_str:
-            # Lọc theo tháng nếu có tháng
-            if report_date.strftime("%Y-%m") != month_str:
-                continue  # Nếu reported_date không phải tháng được chọn, bỏ qua
+        # if month_str:
+        #     # Lọc theo tháng nếu có tháng
+        #     if report_date.strftime("%Y-%m") != month_str:
+        #         continue  # Nếu reported_date không phải tháng được chọn, bỏ qua
 
         latest = find_latest_before(entries, end_dt)
         compare = find_latest_before(entries, start_dt)
@@ -251,23 +251,23 @@ def find_latest_before(entries, target_dt):
 def index(request):
     # 1. Xử lý ngày bắt đầu và kết thúc
     start_date, end_date, month_str = get_date_range(request)
-    print("Start:", start_date , "End:", end_date, "Month:", month_str)
 
     if not month_str:
         month_str = datetime.now().strftime("%Y-%m")
 
     # 2. Tách tháng và năm từ month_str (ví dụ: '2025-07')
     year, month = map(int, month_str.split('-'))
-    print(year, month)
+    print(f"Filtering rates for month: {month_str} (Year: {year}, Month: {month})")
 
     # 2. Ép thành datetime để filter chính xác
     start_dt = datetime.combine(start_date, datetime.min.time())
     end_dt = datetime.combine(end_date, datetime.max.time())
 
     # 3. Truy vấn dữ liệu
-    rates = DailyRate.objects.filter(updated_date__lte=end_dt, reported_date__year=year, reported_date__month=month).order_by("reported_date")
+    # rates = DailyRate.objects.filter(updated_date__lte=end_dt, reported_date__year=year, reported_date__month=month).order_by("reported_date")
+    rates = DailyRate.objects.filter(updated_date__lte=end_dt).order_by("reported_date")
+    print(end_dt)
     valid_dates = sorted(set(rate.updated_date.strftime('%Y-%m-%d') for rate in rates))
-    print("Valid dates:", valid_dates)
     grouped_rates = group_rates_by_reported_date(rates)
 
      # 4. Xử lý bảng
@@ -275,6 +275,8 @@ def index(request):
 
     # 5. Tạo context
     context = {
+        "total_rates": rates.count(),
+        "total_rows": len(rows),
         "rows": rows,
         "columns": COLUMNS,
         "start_date": start_date.strftime("%Y-%m-%d"),
@@ -287,3 +289,4 @@ def index(request):
         return HttpResponse(html)
 
     return render(request, "rates/index.html", context)
+    # return JsonResponse(context)

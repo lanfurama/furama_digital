@@ -1,38 +1,28 @@
-# reviews/crawlers/booking.py
+# reviews/crawlers/naver.py
 
 import re
 from .base_crawler import BaseCrawler
 from time import sleep
 from urllib.parse import urlparse
 
-class TripAdvisorCrawler(BaseCrawler):
+class NaverCrawler(BaseCrawler):
     def __init__(self):
         urls = [
-            "https://www.tripadvisor.com/Hotel_Review-g298085-d302750-Reviews-Furama_Resort_Danang-Da_Nang.html",
-            "https://www.tripadvisor.com/Hotel_Review-g27704560-d1823746-Reviews-TIA_Wellness_Resort-Ngu_Hanh_Son_Da_Nang.html",
-            "https://www.tripadvisor.com/Hotel_Review-g298085-d1732187-Reviews-Pullman_Danang_Beach_Resort-Da_Nang.html",
-            "https://www.tripadvisor.com/Hotel_Review-g298085-d6370235-Reviews-Premier_Village_Danang_Resort_Managed_by_Accor-Da_Nang.html",
-            "https://www.tripadvisor.com/Hotel_Review-g27704560-d2179507-Reviews-Danang_Marriott_Resort_Spa-Ngu_Hanh_Son_Da_Nang.html",
-            "https://www.tripadvisor.com/Hotel_Review-g298085-d2340470-Reviews-Hyatt_Regency_Danang_Resort_Spa-Da_Nang.html",
-            "https://www.tripadvisor.com/Hotel_Review-g298085-d7617524-Reviews-Naman_Retreat-Da_Nang.html",
-            "https://www.tripadvisor.com/Hotel_Review-g298085-d12404186-Reviews-Furama_Villas_Danang-Da_Nang.html",
-            "https://www.tripadvisor.com/Hotel_Review-g298085-d13326393-Reviews-Sheraton_Grand_Danang_Resort_Convention_Center-Da_Nang.html",
-            "https://www.tripadvisor.com/Hotel_Review-g26818864-d27775804-Reviews-Fusion_Resort_Villas_Da_Nang-Hoa_Hai_Da_Nang.html"
+            "https://hotels.naver.com/detail/hotels/N1048536?"
         ]
         self.source = "tripadvisor"
         super().__init__(urls=urls, use_selenium=True)
 
-    def extract_resort_name(self, url):
-        path = urlparse(url).path
-        match = re.search(r'Reviews-([^-]+)', path)
-        if match:
-            name = match.group(1)
-            name = name.replace('_', ' ').strip()
-            return name
+    def extract_resort_name(self, soup):
+        name_tag = soup.find('i', class_="Info_eng__InlcK")
+        if name_tag:
+            return name_tag.get_text(strip=True)
+        return None
+
 
     def extract_rating(self, soup):
         try:
-            rating_tag = soup.find(attrs={"data-automation": "bubbleRatingValue"})
+            rating_tag = soup.find('b', class_="RatingGraph_current__VdTxN")
             if rating_tag:
                 text = rating_tag.get_text(strip=True)
                 return float(text.replace(",", "."))
@@ -83,7 +73,7 @@ class TripAdvisorCrawler(BaseCrawler):
             soup = self.get_soup(url)
             text = soup.get_text(separator="\n")
 
-            resort_name = self.extract_resort_name(url)
+            resort_name = self.extract_resort_name(soup)
             rating = self.extract_rating(soup)
             total_reviews = self.extract_total_reviews(soup)
             breakdown = self.extract_breakdown(soup)
