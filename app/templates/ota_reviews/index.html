@@ -1,0 +1,63 @@
+{% extends "base.html" %} 
+{% block title %}OTA Crawler{% endblock %} 
+
+{% block content %}
+
+<div class="mb-4"  x-data="{  
+    sources: {{ available_sources }},
+    activeItem: null,
+}">
+    <div x-init="activeItem = sources[0]" class="text-sm font-medium text-center text-black border-b border-gray-200">
+        <ul class="flex flex-wrap -mb-px">
+            <!-- Loop through available_sources and display the items -->
+            <template x-for="source in sources" :key="source">
+                <li class="me-2">
+                    <a href="#" 
+                       :hx-get="'{% url 'ota' %}?source=' + source" 
+                       hx-target="#content" 
+                       hx-trigger="click" 
+                       hx-swap="outerHTML"
+                       :class="{
+                            'text-blue-600 border-b-2 border-blue-600': activeItem === source,
+                            'text-gray-600 border-transparent': activeItem !== source
+                        }"
+                       @click="activeItem = source"
+                       class="inline-block p-4 rounded-t-lg text-lg hover:text-gray-600 hover:border-gray-300"
+                       aria-current="page">
+                        <span x-text="source"></span>
+                    </a>
+                </li>
+            </template>
+        </ul>
+    </div>
+
+ <div class="flex flex-wrap justify-start gap-4">
+        <!-- Filter: Base Date -->
+        <div>
+            <label for="base_date" class="block mb-2 text-sm font-medium">Current Date</label>
+            <input type="date" id="base_date" name="base_date"
+                class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5"
+                value="{{ base_date|date:'Y-m-d' }}"
+                :hx-get="'{% url 'ota' %}?source=' + activeItem" 
+                hx-target="#content"
+                hx-trigger="change"
+                hx-include="[name=base_date], [name=compare_date]">
+        </div>
+
+        <!-- Filter: Compare Date -->
+        <div>
+            <label for="compare_date" class="block mb-2 text-sm font-medium">Date to compare</label>
+            <input type="date" id="compare_date" name="compare_date"
+                class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5"
+                value="{{ compare_date|date:'Y-m-d' }}"
+                :hx-get="'{% url 'ota' %}?source=' + activeItem"
+                hx-target="#content"
+                hx-trigger="change"
+                hx-include="[name=base_date], [name=compare_date]">
+        </div>
+    </div>
+    </div>
+
+{% include "ota_reviews/partials/content.html" %}
+
+{% endblock %}

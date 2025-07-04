@@ -1,58 +1,48 @@
-# views/ota_crawler_views.py
 from django.shortcuts import render
-from datetime import timedelta
-from django.utils import timezone
-from concurrent.futures import ThreadPoolExecutor
-from django.db.models import Avg
-from rest_framework.decorators import api_view
-from django.http import JsonResponse
-from app.ota_crawlers.hotelscombined import HotelsCombinedCrawler
-from app.ota_crawlers.booking import BookingCrawler
-from app.ota_crawlers.agoda import AgodaCrawler
-from app.ota_crawlers.expedia import ExpediaCrawler
-from app.ota_crawlers.tripadvisor import TripAdvisorCrawler
+from collections import defaultdict
 from app.models import OtaReview, OtaReviewCriterion, OtaReviewScore
 from app.utils import save_review_data
-from collections import defaultdict
+from datetime import datetime, timedelta
+from django.template.loader import render_to_string
+from django.http import HttpResponse
+from django.http import JsonResponse
 
 
 def fetch_reviews():
     return OtaReview.objects.all().order_by('-created_at')
 
+def get_score_details(current_review, compare_review=None):
+    scores = OtaReviewScore.objects.filter(review=current_review).select_related('criterion')
 
-def get_last_week_review(current_review):
-    return (
-        OtaReview.objects.filter(
-            url=current_review.url,
-            source=current_review.source,
-            created_at__lt=current_review.created_at
+    if compare_review is None:
+        # Nếu không có compare_review, không so sánh với bất kỳ review nào trước đó
+        compare_scores = []
+    else:
+        # Nếu có compare_review, lấy điểm số của review đó
+        compare_scores = (
+            OtaReviewScore.objects
+            .filter(
+                review__resort=current_review.resort,
+                review__created_at__date=compare_review.created_at.date()
+            )
+            .order_by('-review__created_at')
+            .values('criterion', 'value')
         )
-        .order_by('-created_at')
-        .first()
-    )
 
-
-def get_score_details(review):
-    scores = OtaReviewScore.objects.filter(review=review).select_related('criterion')
-
-    last_week_scores = (
-        OtaReviewScore.objects
-        .filter(review__resort=review.resort, review__created_at__lt=review.created_at)
-        .order_by('-review__created_at')
-        .values('criterion', 'value')
-    )
-
+    # Lập bản đồ điểm số từ compare_scores (nếu có)
     last_week_score_map = {
         score['criterion']: score['value']
-        for score in last_week_scores
+        for score in compare_scores
     }
 
     result = []
-
     for score in scores:
+        # Nếu không có điểm số trước đó, previous sẽ là 0
         previous = last_week_score_map.get(score.criterion.id, 0)
+        # Tính toán sự thay đổi điểm số (delta)
         delta = round(score.value - previous, 2) if previous > 0 else 0
 
+        # Thêm thông tin vào kết quả
         result.append({
             "criterion": score.criterion.label,
             "key": score.criterion.key,
@@ -60,52 +50,139 @@ def get_score_details(review):
             "increased_value": delta if delta > 0 else 0,
             "decreased_value": abs(delta) if delta < 0 else 0,
         })
+    
     return result
 
 
-def process_review(review, last_week_review, highest_rating=None, lowest_rating=None, highest_total_reviews=None, lowest_total_reviews=None):
-    rating_delta = review.rating - last_week_review.rating if last_week_review else 0
-    total_reviews_delta = review.total_reviews - last_week_review.total_reviews if last_week_review else 0
+
+
+def process_review(current_review, compare_review):
+    rating_delta = current_review.rating - compare_review.rating if compare_review else 0
+    total_reviews_delta = current_review.total_reviews - compare_review.total_reviews if compare_review else 0
 
     return {
-        "resort": review.resort.name if hasattr(review.resort, 'name') else str(review.resort),
-        "url": review.url,
-        "rating": review.rating,
+        "resort": current_review.resort,
+        "url": current_review.url,
+        "rating": current_review.rating,
         "increased_rating": round(rating_delta, 2) if rating_delta > 0 else 0,
         "decreased_rating": round(abs(rating_delta), 2) if rating_delta < 0 else 0,
-        "last_week_review_updated_at": last_week_review.created_at.strftime("%Y-%m-%d") if last_week_review else None,
-        "total_reviews": review.total_reviews,
+        "compare_review_updated_at": compare_review.created_at.strftime("%Y-%m-%d") if compare_review else None,
+        "total_reviews": current_review.total_reviews,
         "increased_total_reviews": round(total_reviews_delta, 2) if total_reviews_delta > 0 else 0,
         "decreased_total_reviews": round(abs(total_reviews_delta), 2) if total_reviews_delta < 0 else 0,
-        "scores": get_score_details(review),
-        "updated_at": review.created_at.strftime("%Y-%m-%d")
+        "scores": get_score_details(current_review, compare_review),
+        "updated_at": current_review.created_at.strftime("%Y-%m-%d")
     }
 
-def get_reviews_from_db(request):
-    source_param = request.GET.get('source', None)
+
+def get_ordered_resorts(resorts_dict, order_list):
+    return sorted(
+        resorts_dict.items(),
+        key=lambda x: order_list.index(x[0]) if x[0] in order_list else len(order_list)
+    )
+
+
+def annotate_extremes(processed_reviews):
+    if not processed_reviews:
+        return
+
+    highest_rating = max(processed_reviews, key=lambda x: x['rating'])['rating']
+    lowest_rating = min(processed_reviews, key=lambda x: x['rating'])['rating']
+    highest_total = max(processed_reviews, key=lambda x: x['total_reviews'])['total_reviews']
+    lowest_total = min(processed_reviews, key=lambda x: x['total_reviews'])['total_reviews']
+
+    criterion_scores = defaultdict(list)
+    for review in processed_reviews:
+        for score in review['scores']:
+            criterion_scores[score['key']].append(score['value'])
+
+    for review in processed_reviews:
+        review['highest_rating'] = review['rating'] == highest_rating
+        review['lowest_rating'] = review['rating'] == lowest_rating
+        review['highest_total_reviews'] = review['total_reviews'] == highest_total
+        review['lowest_total_reviews'] = review['total_reviews'] == lowest_total
+
+        for score in review['scores']:
+            scores_for_criterion = criterion_scores[score['key']]
+            score['highest_score'] = score['value'] == max(scores_for_criterion)
+            score['lowest_score'] = score['value'] == min(scores_for_criterion)
+
+
+def process_source_reviews(source, resorts, order):
+    processed_reviews = []
+    all_created_times = []
+
+    for resort, review_infos in get_ordered_resorts(resorts, order):
+        info = review_infos[0]
+        review = info['review']
+        processed_reviews.append(
+            process_review(info['review'], info['compare_review'])
+        )
+        if review.created_at:
+            all_created_times.append(review.created_at)
+
+    annotate_extremes(processed_reviews)
+
+    criteria_keys = list(
+        OtaReviewCriterion.objects
+        .filter(source=source)
+        .order_by('id')
+        .values_list('key', flat=True)
+    )
+
+    latest_updated_time = max(all_created_times) if all_created_times else None
+
+    return {
+        "criteria_keys": criteria_keys,
+        "reviews": processed_reviews,
+        "latest_updated_time": latest_updated_time
+    }
+
+
+def get_compare_review(current_review, compare_date):
+    return (
+            OtaReview.objects.filter(
+                url=current_review.url,
+                source=current_review.source,
+                created_at__date=compare_date 
+            )
+            .order_by('-created_at')
+            .first()
+    )
+
+
+def get_reviews_from_db(request, source = None, base_date=None, compare_date=None):
     reviews = fetch_reviews()
+    latest_updated_time = None
 
-    # Extract sources from reviews (unique sources only)
-    available_sources = list({review.source for review in reviews})
-
-    # If no source is provided, set the first source from the available sources as default
-    if not source_param and available_sources:
-        source_param = available_sources[0]
+    preferred_order = ['hotelscombined', 'booking', 'agoda', 'expedia', 'tripadvisor', 'naver']
+    all_sources = sorted(
+        {review.source for review in reviews},
+        key=lambda x: preferred_order.index(x) if x in preferred_order else len(preferred_order)
+    )
 
     grouped = defaultdict(lambda: defaultdict(list))
     for review in reviews:
-        last_week_review = get_last_week_review(review)
+        compare_review = get_compare_review(review, compare_date)   
         grouped[review.source][review.resort].append({
             'review': review,
-            'last_week_review': last_week_review
+            'compare_review': compare_review
         })
-    
-    # If the source param is provided, only process that source
-    if source_param:
-        grouped = {source_param: grouped.get(source_param, {})}
 
-    order = [
-        "Furama_Resort_Danang",
+    if source:
+        grouped = {source: grouped.get(source, {})}
+    else:
+        first_source = None
+        for preferred in preferred_order:
+            if preferred in grouped:
+                first_source = preferred
+                break
+        if first_source:
+            grouped = {first_source: grouped[first_source]}
+
+    # Resort order: bạn có thể dùng danh sách thủ công hoặc từ dữ liệu
+    predefined_order = [
+        "Furama Resort Danang",
         "Tia_Wellness_Resort",
         "Pullman_Danang",
         "Premier_Village_Danang_Resort",
@@ -116,76 +193,43 @@ def get_reviews_from_db(request):
         "Fusion_Resort_Da_Nang"
     ]
 
+    order = predefined_order  # hoặc lấy từ dữ liệu nếu muốn dynamic
+
     final = {}
-
     for source, resorts in grouped.items():
-        sorted_resorts = sorted(
-            resorts.items(),
-            key=lambda x: order.index(x[0]) if x[0] in order else len(order)
-        )
-
-        processed_reviews = []
-        for resort, review_infos in sorted_resorts:
-            info = review_infos[0]
-            processed_reviews.append(
-                process_review(info['review'], info['last_week_review'])
-            )
-
-        # Tính toán highest_rating, lowest_rating, highest_total_reviews, lowest_total_reviews sau khi đã xử lý xong reviews
-        highest_rating = max(processed_reviews, key=lambda x: x['rating'])['rating'] if processed_reviews else None
-        lowest_rating = min(processed_reviews, key=lambda x: x['rating'])['rating'] if processed_reviews else None
-        highest_total_reviews = max(processed_reviews, key=lambda x: x['total_reviews'])['total_reviews'] if processed_reviews else None
-        lowest_total_reviews = min(processed_reviews, key=lambda x: x['total_reviews'])['total_reviews'] if processed_reviews else None
-
-        criterion_scores = defaultdict(list)    
-
-        # Thu thập tất cả các scores theo từng criterion
-        for review_info in processed_reviews:
-            for score in review_info['scores']:
-                criterion_scores[score['key']].append(score['value'])
-
-        # Thêm các giá trị này vào dict mỗi resort
-        for review_info in processed_reviews:
-            review_info['highest_rating'] = review_info['rating'] == highest_rating
-            review_info['lowest_rating'] = review_info['rating'] == lowest_rating
-            review_info['highest_total_reviews'] = review_info['total_reviews'] == highest_total_reviews
-            review_info['lowest_total_reviews'] = review_info['total_reviews'] == lowest_total_reviews
-
-            for score in review_info['scores']:
-                # Lấy danh sách tất cả các score cho criterion này
-                all_scores_for_criterion = criterion_scores[score['key']]
-                
-                # Tìm giá trị max và min cho criterion
-                highest_score_value = max(all_scores_for_criterion) if all_scores_for_criterion else None
-                lowest_score_value = min(all_scores_for_criterion) if all_scores_for_criterion else None
-                
-                # Gán highest_score và lowest_score cho từng score trong review_info
-                score['highest_score'] = score['value'] == highest_score_value
-                score['lowest_score'] = score['value'] == lowest_score_value
-
-        # chỉ cần lấy criteria_keys một lần cho mỗi source
-        criteria_keys = list(
-            OtaReviewCriterion.objects
-            .filter(source=source)
-            .order_by('id')
-            .values_list('key', flat=True)
-        )
-
-        final[source] = {
-            "criteria_keys": criteria_keys,
-            "reviews": processed_reviews
-        }
+        result = process_source_reviews(source, resorts, order)
+        final[source] = result
+        # Lưu latest crawl time từ từng source (lấy lớn nhất)
+        if result['latest_updated_time']:
+            if not latest_updated_time or result['latest_updated_time'] > latest_updated_time:
+                latest_updated_time = result['latest_updated_time']
 
     return {
         "reviews": final,
-        "available_sources": available_sources
+        "available_sources": all_sources,
+        "latest_updated_time": latest_updated_time,
+        "base_date": base_date,
+        "compare_date": compare_date
     }
 
-
+# view
 def ota_crawler_home(request):
-    data = get_reviews_from_db(request)
-    # Unpack the data into final and available_sources
-    reviews = data['reviews']
-    available_sources = data['available_sources']
-    return render(request, "ota_crawler/index.html", {'reviews': reviews, 'available_sources': available_sources})
-    # return JsonResponse(data, safe=False) 
+    source = request.GET.get('source', 'hotelscombined')
+    base_date = request.GET.get('base_date')
+    compare_date = request.GET.get('compare_date')
+    
+    # Chuyển đổi thành datetime nếu cần
+    if isinstance(base_date, str):
+        base_date = datetime.strptime(base_date, "%Y-%m-%d")
+    if isinstance(compare_date, str):
+        compare_date = datetime.strptime(compare_date, "%Y-%m-%d")
+    
+    # Gọi hàm để lấy dữ liệu
+    context = get_reviews_from_db(request, source, base_date, compare_date)
+ 
+    if request.headers.get("HX-Request") == "true":
+        html = render_to_string("ota_reviews/partials/content.html", context)
+        return HttpResponse(html)
+    
+    return render(request, "ota_reviews/index.html", context)
+    # return JsonResponse(context, safe=False)

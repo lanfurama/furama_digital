@@ -29,51 +29,69 @@
   </style>
 {% endblock %}
 
+
 {% block content %}
+
+
     <!-- 👇 So sánh theo ngày cập nhật -->
 <div x-data="litepickerSeparate({{ valid_dates|safe }}, '{{ start_date }}', '{{ end_date }}')" x-init="init()" class="mt-6 space-y-4">
 
-  <!-- Ngày được chọn hiển thị rõ ràng -->
-  <template x-if="start && end">
-    <div class="flex items-center gap-2 text-sm text-white bg-black border border-gray-700 rounded-md px-4 py-2 w-fit shadow-sm mt-[30px]">
-      <span class="text-gray-400">Comparing rates by</span><span class="text-white">Updated Date: </span>
-      <span class="font-medium text-blue-400" x-text="start"></span>
-      <span class="text-gray-500">→</span>
-      <span class="font-medium text-green-400" x-text="end"></span>
-    </div>
-  </template>
-
   <!-- Bộ chọn ngày -->
   <div class="flex flex-wrap gap-6 items-end">
-    <!-- Ngày cũ hơn -->
+    <!-- Ngày hiện tại -->
     <div class="flex flex-col">
-      <label class="text-sm font-medium mb-1 text-gray-700">Compare with (Older Date)</label>
-      <div class="relative">
-        <input x-ref="fromInput"
-              type="text"
-              class="border border-gray-300 pl-10 pr-4 py-2 rounded-md text-sm w-52 bg-white cursor-pointer shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Select older date"
-              readonly>
-        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-          📅
-        </div>
+    <label class="text-sm font-medium mb-1 text-gray-700">Current date (<span x-text="end"></span>)</label>
+    <div class="relative">
+      <input x-ref="toInput"
+            type="text"
+            class="border border-gray-300 pl-10 pr-4 py-2 rounded-md text-sm w-52 bg-white cursor-pointer shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Select"
+            readonly>
+      <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+        📅
       </div>
+    </div>
+  </div>
+
+  <!-- Separator -->
+   <div class="flex flex-col">
+    <span>vs .</span>
     </div>
 
     <!-- Ngày mới hơn -->
     <div class="flex flex-col">
-      <label class="text-sm font-medium mb-1 text-gray-700">Compare to (Latest Date)</label>
+      <label class="text-sm font-medium mb-1 text-gray-700">Date to compare (<span x-text="start"></span>) </label>
       <div class="relative">
-        <input x-ref="toInput"
+        <input x-ref="fromInput"
               type="text"
               class="border border-gray-300 pl-10 pr-4 py-2 rounded-md text-sm w-52 bg-white cursor-pointer shadow-sm focus:ring-green-500 focus:border-green-500"
-              placeholder="Select latest date"
+              placeholder="Select "
               readonly>
         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
           📅
         </div>
       </div>
     </div>
+
+  <div class="flex flex-col">
+    <label for="sort-by" class="block text-sm font-medium mb-1">Sort by</label>
+    <select id="sort-by" name="sort-by"
+      class="block w-48 px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      hx-get="{% url 'rates' %}"
+      hx-target="#ratesTableBody"
+      hx-include="[name='sort-by']"
+      hx-trigger="change"
+    >
+      <option value="latest-updated">Latest Updated</option>
+      <option value="latest-reported">Latest Reported</option>
+      <option value="oldest-reported">Oldest Reported</option>
+      <option value="highest_price">Highest Price</option>
+      <option value="lowest_price">Lowest Price</option>
+      <option value="most_soldout">Most Sold Out</option>
+      <option value="price_gap">Price Gap (Highest Difference)</option>
+    </select>
+  </div>
+
 
     <!-- Chọn tháng -->
     <!-- <div class="flex flex-col">
@@ -97,11 +115,41 @@
   <!-- Table -->
   <div class="overflow-hidden border rounded-lg shadow bg-white mt-4">
     <table class="w-full text-sm text-left table-auto">
+      <caption class="p-3 text-right dark:bg-blue-900">
+  <div class="flex flex-wrap justify-start gap-4">
+
+    <!-- Sold Out -->
+    <div class="flex flex-col items-start bg-blue-50 dark:bg-blue-600 text-blue-800 dark:text-white shadow-md rounded-xl px-4 py-3 w-48">
+      <div class="text-sm font-medium uppercase tracking-wide">Total Sold Out</div>
+      <div class="text-xl font-bold">{{ total_sold_out }}</div>
+    </div>
+
+    <!-- Flex Out -->
+    <div class="flex flex-col items-start bg-yellow-50 dark:bg-yellow-700 text-yellow-800 dark:text-white shadow-md rounded-xl px-4 py-3 w-48">
+      <div class="text-sm font-medium uppercase tracking-wide">Total Flex Out</div>
+      <div class="text-xl font-bold">{{ total_flex_out }}</div>
+    </div>
+
+    <!-- Average OTB -->
+    <div class="flex flex-col items-start bg-green-50 dark:bg-green-800 text-green-800 dark:text-white shadow-md rounded-xl px-4 py-3 w-48">
+      <div class="text-sm font-medium uppercase tracking-wide">Average OTB</div>
+      <div class="text-xl font-bold">{{ avg_otb }}</div>
+    </div>
+
+    <!-- Average Price -->
+    <div class="flex flex-col items-start bg-purple-50 dark:bg-purple-800 text-purple-800 dark:text-white shadow-md rounded-xl px-4 py-3 w-48">
+      <div class="text-sm font-medium uppercase tracking-wide">Average Price</div>
+      <div class="text-xl font-bold">{{ avg_price }}</div>
+    </div>
+
+  </div>
+</caption>
+
       <thead class="bg-gray-100 dark:bg-neutral-700 border-b">
         <tr>
           <th class="p-3 font-semibold">Reported Date</th>
           {% for col_key, col_label in columns %}
-            <th class="p-3 font-semibold">{{ col_label }}</th>
+            <th class="p-3 font-semibold {% if col_key == 'furama_resort' %}text-blue-700 bg-green-100{% endif %}">{{ col_label }}</th>
           {% endfor %}
         </tr>
       </thead>

@@ -14,12 +14,12 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         # Danh sách các crawler bạn muốn sử dụng
         crawlers = [
-            # HotelsCombinedCrawler(),
-            # BookingCrawler(),
-            # AgodaCrawler(),
-            # ExpediaCrawler(),
-            # TripAdvisorCrawler(),
-            NaverCrawler(),  # Thêm NaverCrawler vào danh sách
+            HotelsCombinedCrawler(),
+            BookingCrawler(),
+            AgodaCrawler(),
+            ExpediaCrawler(),
+            TripAdvisorCrawler(),
+            # NaverCrawler(),  # Thêm NaverCrawler vào danh sách
         ]
         
         results = []
@@ -34,8 +34,8 @@ class Command(BaseCommand):
                     continue
                 
                 # Lưu kết quả vào cơ sở dữ liệu nếu cần
-                # save_review_data(result, crawler)
-                results.append(result)
+                save_review_data(result, crawler)
+                # results.append(result)
 
         # Đảm bảo rằng các driver selenium được đóng sau khi crawl xong
         for crawler in crawlers:

@@ -2,9 +2,10 @@
 """Django's command-line utility for administrative tasks."""
 import os
 import sys
-
+import warnings
 
 def main():
+    warnings.filterwarnings("ignore", category=RuntimeWarning)
     """Run administrative tasks."""
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'furama_digital.settings')
     try:

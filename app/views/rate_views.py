@@ -8,12 +8,10 @@ from collections import defaultdict
 from decimal import Decimal, InvalidOperation
 import math
 from django.shortcuts import redirect
-from app.services.excel_importer import import_excel_file
 from django.contrib import messages
 from django.utils.dateparse import parse_date
 from datetime import datetime, timedelta, date
-from app.services.automation.lighthouse.fetch_rates import LighthouseRateFetcher
-import calendar
+import json
 
 # ========================
 # Utilities
@@ -21,13 +19,9 @@ import calendar
 
 def is_nan(value):
     try:
-        if isinstance(value, float):
-            return math.isnan(value)
-        elif isinstance(value, Decimal):
-            return value.is_nan()
-    except (TypeError, InvalidOperation):
+        return math.isnan(float(value))
+    except (TypeError, InvalidOperation, ValueError):
         return False
-    return False
 
 def format_currency(value, is_percent=False):
     # Định dạng số liệu để hiển thị ra frontend, tuỳ vào loại dữ liệu (giá tiền hoặc phần trăm)
@@ -42,47 +36,61 @@ def format_currency(value, is_percent=False):
     return f"{value:,.0f}₫"
 
 
-def create_cell(latest_value, compare_value, latest_date=None, compare_date=None, is_percent=False):
+def create_cell(current_value, compare_value, latest_date=None, compare_date=None, is_percent=False):
     # Tạo dữ liệu cho từng ô trong bảng, bao gồm logic tính phần trăm chênh lệch và tooltip
-    if latest_value is None or is_nan(latest_value):
-        return {"display": "--"}
-    if latest_value == 0:
-        return {"display": "Flex out"}
-    if latest_value == -1:
-        return {"display": "Sold out"}
+    if current_value is None or is_nan(current_value):
+        return {"display_current_value": "--"}
+    if current_value in [0, -1]:
+        return {"display_current_value": "Flex out" if current_value == 0 else "Sold out"}
 
     # Format giá trị hiện tại
-    display = format_currency(latest_value, is_percent)
+    display_current_value = format_currency(current_value, is_percent)
+    result = {"display_current_value": display_current_value, "current_value": current_value}
 
     if compare_value not in [None, 0, -1] and not is_nan(compare_value):
         try:
-            percent = ((latest_value - compare_value) / compare_value) * 100
+            percent = ((current_value - compare_value) / compare_value) * 100
             percent = max(min(percent, 100), -100)
-            if percent:
-                data = {
-                    "display": display,
-                    "percent": f"{percent:+.1f}%",
-                    "trend": "up" if percent > 0 else "down",
-                    "latest": display,
-                    "latest_date": latest_date,
-                    "compare": format_currency(compare_value, is_percent),
-                    "change": f"{(latest_value - compare_value):+,.1f}" + ("%" if is_percent else "₫"),
-                    "compare_date": compare_date.strftime("%d/%m/%Y") if compare_date else None,
-                    "tooltip": True,
-                }
-                return data
-            else:
-                return {
-                    "display": display,
-                    "latest": display,
-                }
-        except Exception as e:
-            return {"display": display}
-    else:
-        return {
-            "display": display,
-            "latest": display,
-        }
+            result.update({
+                "display_compare_value": format_currency(compare_value, is_percent),
+                "percent": f"{percent:+.1f}%",
+                "trend": "up" if percent > 0 else "down",
+                "change_value": f"{(current_value - compare_value):+,.1f}" + ("" if is_percent else "₫"),
+                "tooltip": True
+            })
+        except ZeroDivisionError:
+            pass
+    return result
+    
+def calculate_rate_statistics(rows, columns):
+    total_sold_out, total_flex_out, total_otb, total_price = 0, 0, 0, 0
+    count, price_count = len(rows), 0
+
+    for row in rows:
+        if row.get('cells') and len(row['cells']) > 0:
+            my_otb = row['cells'][0].get('current_value')
+            if my_otb is not None:
+                total_otb += my_otb
+
+        # Calculate total price for resorts (furama_resort, hyatt_regency, etc.)
+        for cell in row.get('cells', [])[2:]:  # Starting from "furama_resort" column
+            value = cell.get('current_value')
+            value_display = cell.get('display_current_value')
+
+            if value is not None:
+                total_price += value
+                price_count += 1
+
+            if value_display == "Sold out":
+                total_sold_out += 1
+            elif value_display == "Flex out":
+                total_flex_out += 1
+
+    # Calculate averages
+    avg_otb = total_otb / count if count > 0 else 0
+    avg_price = total_price / price_count if price_count > 0 else 0
+
+    return total_sold_out, total_flex_out, format_currency(avg_otb, is_percent=True), format_currency(avg_price)
 
 # ========================
 # Constants
@@ -105,32 +113,8 @@ COLUMNS = [
 ]
 
 # ========================
-# Data Processing
+# Helpers
 # ========================
-
-def find_comparable_entry(latest, entries, start_dt=None, end_dt=None):
-    # Danh sách ngày hợp lệ, đã sort giảm dần theo updated_date
-    sorted_entries = sorted(
-        [e for e in entries if e != latest],
-        key=lambda r: r.updated_date,
-        reverse=True
-    )
-
-    # Trường hợp có start_dt và end_dt từ request
-    if start_dt and end_dt:
-        candidates = [
-            e for e in sorted_entries
-            if start_dt <= e.updated_date <= end_dt
-        ]
-        return candidates[0] if candidates else None
-
-    # Nếu không có start và end, tự động chọn 2 bản gần nhất
-    for e in sorted_entries:
-        if e.updated_date < latest.updated_date:
-            return e
-
-    return None
-
 
 def group_rates_by_reported_date(rates):
     grouped = defaultdict(list)
@@ -138,35 +122,10 @@ def group_rates_by_reported_date(rates):
         grouped[rate.reported_date].append(rate)
     return grouped
 
-def process_rate_row(report_date, entries, start_dt=None, end_dt=None):
-    entries.sort(key=lambda x: x.updated_date, reverse=True)
-    latest = entries[0]
-    date_status = "today" if report_date == date.today() else "future" if report_date > date.today() else "past"
 
-    compare = find_comparable_entry(latest, entries, start_dt, end_dt)
-
-    row = {
-        "reported_date": report_date.strftime("%d/%m/%Y"),
-        "updated_date": latest.updated_date.strftime("%d/%m/%Y"),
-        "cells": [],
-        "date_status": date_status
-    }
-
-    for field, _ in COLUMNS:
-        latest_value = getattr(latest, field, None)
-        compare_value = getattr(compare, field, 0) if compare else 0
-        is_percent = field in ["my_otb", "market_demand"]
-
-        cell = create_cell(
-            latest_value,
-            compare_value,
-            latest.updated_date if latest else None,
-            compare.updated_date if compare else None,
-            is_percent
-        )
-        row["cells"].append(cell)
-
-    return row
+def find_latest_before(entries, target_dt):
+    candidates = [r for r in entries if r.updated_date <= target_dt]
+    return max(candidates, key=lambda r: r.updated_date) if candidates else None
 
 
 def get_date_range(request):
@@ -186,11 +145,9 @@ def get_date_range(request):
 
     # Lấy ngày mới nhất
     end = updated_dates.last().date()
-
     # Tìm ngày gần nhất trước ngày mới nhất
     dates_before = [d.date() for d in updated_dates if d.date() < end]
     start = max(dates_before) if dates_before else end  # fallback nếu chỉ có 1 ngày
-
     return start, end, month_str
 
 
@@ -225,24 +182,75 @@ def build_comparison_rows(grouped_rates, start_dt, end_dt, month_str=None):
             latest_value = getattr(latest, field, None)
             compare_value = getattr(compare, field, 0) if compare else 0
             is_percent = field in ["my_otb", "market_demand"]
-
-            cell = create_cell(
+            row["cells"].append(create_cell(
                 latest_value,
                 compare_value,
                 latest.updated_date.strftime("%d/%m/%Y"),
                 compare.updated_date if compare else None,
                 is_percent
-            )
-            row["cells"].append(cell)
+            ))
 
         rows.append(row)
 
     return rows
 
 
-def find_latest_before(entries, target_dt):
-    candidates = [r for r in entries if r.updated_date <= target_dt]
-    return max(candidates, key=lambda r: r.updated_date) if candidates else None
+def sort_rows(rows, sort_by):
+    def parse_date_str(d):
+        return datetime.strptime(d, "%d/%m/%Y")
+
+    if sort_by == "latest-updated":
+        rows.sort(key=lambda r: parse_date_str(r["updated_date"]), reverse=True)
+
+    elif sort_by == "latest-reported":
+        rows.sort(key=lambda r: parse_date_str(r["reported_date"]), reverse=True)
+
+    elif sort_by == "oldest-reported":
+        rows.sort(key=lambda r: parse_date_str(r["reported_date"]))
+
+    elif sort_by == "highest_price":
+        rows.sort(
+            key=lambda r: next(
+                (cell.get("current_value") or 0 for cell in r["cells"][2:]
+                 if cell.get("current_value") is not None),
+                0
+            ),
+            reverse=True
+        )
+
+    elif sort_by == "lowest_price":
+        rows.sort(
+            key=lambda r: next(
+                (cell.get("current_value") for cell in r["cells"][2:]
+                 if cell.get("current_value") is not None),
+                float("inf")
+            )
+        )
+
+    elif sort_by == "most_soldout":
+        rows.sort(
+            key=lambda r: sum(
+                1 for cell in r["cells"][2:]
+                if cell.get("display_current_value") == "Sold out"
+            ),
+            reverse=True
+        )
+
+    elif sort_by == "price_gap":
+        rows.sort(
+            key=lambda r: (
+                max([
+                    cell.get("current_value") for cell in r["cells"][2:]
+                    if isinstance(cell.get("current_value"), (int, float))
+                ] or [0])
+                -
+                min([
+                    cell.get("current_value") for cell in r["cells"][2:]
+                    if isinstance(cell.get("current_value"), (int, float))
+                ] or [0])
+            ),
+            reverse=True
+        )
 
 
 # ========================
@@ -251,13 +259,10 @@ def find_latest_before(entries, target_dt):
 def index(request):
     # 1. Xử lý ngày bắt đầu và kết thúc
     start_date, end_date, month_str = get_date_range(request)
-
-    if not month_str:
-        month_str = datetime.now().strftime("%Y-%m")
+    month_str = month_str or datetime.now().strftime("%Y-%m")
 
     # 2. Tách tháng và năm từ month_str (ví dụ: '2025-07')
     year, month = map(int, month_str.split('-'))
-    print(f"Filtering rates for month: {month_str} (Year: {year}, Month: {month})")
 
     # 2. Ép thành datetime để filter chính xác
     start_dt = datetime.combine(start_date, datetime.min.time())
@@ -265,13 +270,15 @@ def index(request):
 
     # 3. Truy vấn dữ liệu
     # rates = DailyRate.objects.filter(updated_date__lte=end_dt, reported_date__year=year, reported_date__month=month).order_by("reported_date")
-    rates = DailyRate.objects.filter(updated_date__lte=end_dt).order_by("reported_date")
-    print(end_dt)
-    valid_dates = sorted(set(rate.updated_date.strftime('%Y-%m-%d') for rate in rates))
+    rates = DailyRate.objects.filter(updated_date__lte=end_dt, reported_date__year=year).order_by("reported_date")
     grouped_rates = group_rates_by_reported_date(rates)
-
-     # 4. Xử lý bảng
+    valid_dates = sorted(set(rate.updated_date.strftime('%Y-%m-%d') for rate in rates))
     rows = build_comparison_rows(grouped_rates, start_dt, end_dt, month_str)
+
+    sort_by = request.GET.get("sort-by", "latest")
+
+    sort_rows(rows, sort_by)
+    total_sold_out, total_flex_out, avg_otb, avg_price = calculate_rate_statistics(rows, COLUMNS)
 
     # 5. Tạo context
     context = {
@@ -282,6 +289,10 @@ def index(request):
         "start_date": start_date.strftime("%Y-%m-%d"),
         "end_date": end_date.strftime("%Y-%m-%d"),
         "valid_dates": valid_dates, 
+        "total_sold_out": total_sold_out,  # Total sold out
+        "total_flex_out": total_flex_out,  # Total flex out
+        "avg_otb": avg_otb,  # Average OTB
+        "avg_price": avg_price,  # Average price
     }
 
     if request.headers.get("HX-Request") == "true":

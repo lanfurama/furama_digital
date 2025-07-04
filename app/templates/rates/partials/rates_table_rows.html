@@ -16,17 +16,17 @@
   <td class="px-4 py-2 align-top text-sm">
     <div class="flex items-center gap-1">
       {% if cell.trend == 'up' %}
-        <span class="text-green-600 font-semibold">{{ cell.display }}</span>
+        <span class="text-green-600 font-semibold">{{ cell.display_current_value }}</span>
         <svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
           <path d="M5 10l5-5 5 5H5z" />
         </svg>
       {% elif cell.trend == 'down' %}
-        <span class="text-red-600 font-semibold">{{ cell.display }}</span>
+        <span class="text-red-600 font-semibold">{{ cell.display_current_value }}</span>
         <svg class="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
           <path d="M15 10l-5 5-5-5h10z" />
         </svg>
       {% else %}
-       <span>{{ cell.display }}</span>
+       <span>{{ cell.display_current_value }}</span>
       {% endif %}
     </div>
 
@@ -43,24 +43,19 @@
             bottom-full left-1/2 transform -translate-x-1/2 mt-1 w-72 bg-white dark:bg-neutral-800 
             border border-gray-300 dark:border-neutral-600 shadow-lg text-sm p-3 rounded-lg">
         <table class="w-full text-xs text-left border-collapse">
-          <thead>
-            <tr class="border-b dark:border-neutral-700">
-              <th class="py-1">Compare</th>
-              <th class="py-1">Value</th>
-            </tr>
-          </thead>
           <tbody>
+           
             <tr>
-              <td class="py-1 dark:text-neutral-300">From ({{ cell.compare_date }})</td>
-              <td class="py-1 dark:text-neutral-300">{{ cell.compare }}</td>
+              <td class="py-1 dark:text-neutral-300">Previous</td>
+              <td class="py-1 dark:text-neutral-300">{{ cell.display_compare_value }}</td>
             </tr>
             <tr>
               <td class="py-1 dark:text-neutral-300">Change</td>
-              <td class="py-1 dark:text-neutral-300">{{ cell.change }}</td>
+              <td class="py-1 dark:text-neutral-300">{{ cell.percent }} ({{ cell.change_value }})</td>
             </tr>
-            <tr>
-              <td class="py-1 dark:text-neutral-300">To ({{ cell.latest_date }})</td>
-              <td class="py-1 dark:text-neutral-300">{{ cell.latest }}</td>
+             <tr>
+              <td class="py-1 dark:text-neutral-300">Current</td>
+              <td class="py-1 dark:text-neutral-300">{{ cell.display_current_value }}</td>
             </tr>
           </tbody>
         </table>
