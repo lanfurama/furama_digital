@@ -6,6 +6,7 @@ from app.ota_crawlers.agoda import AgodaCrawler
 from app.ota_crawlers.expedia import ExpediaCrawler
 from app.ota_crawlers.tripadvisor import TripAdvisorCrawler
 from app.ota_crawlers.naver import NaverCrawler
+from app.ota_crawlers.googlereview import GoogleReviewCrawler
 from app.utils import save_review_data
 
 class Command(BaseCommand):
@@ -19,7 +20,8 @@ class Command(BaseCommand):
             AgodaCrawler(),
             ExpediaCrawler(),
             TripAdvisorCrawler(),
-            # NaverCrawler(),  # Thêm NaverCrawler vào danh sách
+            GoogleReviewCrawler(),
+            NaverCrawler(),
         ]
         
         results = []

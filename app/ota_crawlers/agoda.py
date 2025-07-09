@@ -65,6 +65,7 @@ class AgodaCrawler(BaseCrawler):
         return data
 
     def crawl(self, url):
+        self.create_driver() 
         print(f"🌐 Crawling: {url}")
         try:
             soup = self.get_soup(url)

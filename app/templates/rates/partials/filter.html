@@ -1,0 +1,161 @@
+<!-- Filters -->
+ <div class="flex flex-wrap gap-6 items-end">
+   <div class="flex items-end gap-6 border border-gray-300 rounded-lg p-2 bg-white">
+    <!-- To Date -->
+    <div class="flex flex-col">
+      <label class="text-sm font-medium mb-1 text-gray-700">Current date (<span x-text="end"></span>)</label>
+      <div class="relative">
+        <input x-ref="toInput" type="text"
+          class="border border-gray-300 pl-10 pr-4 py-2 rounded-md text-sm w-52 bg-white cursor-pointer shadow-sm focus:ring-blue-500 focus:border-blue-500"
+          placeholder="Select" readonly>
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">📅</div>
+      </div>
+    </div>
+    <!-- From Date -->
+    <div class="flex flex-col">
+      <label class="text-sm font-medium mb-1 text-gray-700">Date to compare (<span x-text="start"></span>)</label>
+      <div class="relative">
+        <input x-ref="fromInput" type="text"
+          class="border border-gray-300 pl-10 pr-4 py-2 rounded-md text-sm w-52 bg-white cursor-pointer shadow-sm focus:ring-green-500 focus:border-green-500"
+          placeholder="Select " readonly>
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">📅</div>
+      </div>
+    </div>
+  </div>
+
+    <!-- Month -->
+    <div class="flex flex-col">
+      <label class="text-sm font-medium mb-1 text-gray-700">Select Month</label>
+      <div class="relative">
+        <input type="month" id="monthInput" name="month"
+              class="border border-gray-300 pl-10 pr-4 py-2 rounded-md text-sm w-52 bg-white cursor-pointer shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              :value="month" @change="updateParam('month', $event.target.value)">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">📅</div>
+      </div>
+    </div>
+    <!-- Sort -->
+    <div class="flex flex-col">
+      <label for="sort-by" class="block text-sm font-medium mb-1">Sort by</label>
+      <select id="sort-by" name="sort-by"
+        class="block w-48 px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        v-model="sort_by"
+        @change="updateParam('sort_by', $event.target.value)">
+        <option value="" selected>Select an option</option>
+        <option value="highest_price">Highest Price</option>
+        <option value="lowest_price">Lowest Price</option>
+        <option value="most_soldout">Most Sold Out</option>
+        <option value="price_gap">Price Gap</option>
+      </select>
+    </div>
+    <!-- Nếu muốn thêm filter mới -->
+    <!--
+    <div class="flex flex-col">
+      <label>Search</label>
+      <input type="text" class="..." @input="updateParam('search', $event.target.value)">
+    </div>
+    -->
+  </div>
+
+
+  <script>
+function ratesFilters(validDates, defaultStart, defaultEnd, defaultMonth, defaultSort) {
+  return {
+    start: defaultStart,
+    end: defaultEnd,
+    month: defaultMonth,
+    sort_by: defaultSort,
+    // search: '', // dễ dàng mở rộng filter mới ở đây
+
+    init() {
+      const self = this;
+      const validSet = new Set(validDates);
+
+      // "From Date" Picker
+      new Litepicker({
+        element: this.$refs.fromInput,
+        format: 'YYYY-MM-DD',
+        autoApply: true,
+        singleMode: true,
+        lockDays: this.getInvalidDays(validDates),
+        setup: (picker) => {
+          picker.on('selected', (date) => {
+            const str = date.format('YYYY-MM-DD');
+            if (validSet.has(str)) {
+              self.start = str;
+              self.$refs.fromInput.value = str;
+              self.fetch();
+            } else {
+              self.$refs.fromInput.value = '';
+              self.start = null;
+            }
+          });
+        }
+      });
+      // "To Date" Picker
+      new Litepicker({
+        element: this.$refs.toInput,
+        format: 'YYYY-MM-DD',
+        autoApply: true,
+        singleMode: true,
+        lockDays: this.getInvalidDays(validDates),
+        setup: (picker) => {
+          picker.on('selected', (date) => {
+            const str = date.format('YYYY-MM-DD');
+            if (validSet.has(str)) {
+              self.end = str;
+              self.$refs.toInput.value = str;
+              self.fetch();
+            } else {
+              self.$refs.toInput.value = '';
+              self.end = null;
+            }
+          });
+        }
+      });
+    },
+
+    getInvalidDays(validDates) {
+      const validSet = new Set(validDates);
+      const start = new Date("2024-01-01");
+      const end = new Date("2026-12-31");
+      const invalid = [];
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const str = d.toISOString().split('T')[0];
+        if (!validSet.has(str)) {
+          invalid.push(str);
+        }
+      }
+      return invalid;
+    },
+
+    updateParam(param, value) {
+      this[param] = value;
+      // Reset start/end khi đổi tháng chẳng hạn, có thể customize theo nhu cầu
+      if (param === 'month') {
+        this.start = '';
+        this.end = '';
+        if (this.$refs.fromInput) this.$refs.fromInput.value = '';
+        if (this.$refs.toInput) this.$refs.toInput.value = '';
+      }
+      this.fetch();
+    },
+
+    fetch() {
+      // Gom tất cả param lại, dễ mở rộng sau này
+      const params = {
+        start_date: this.start,
+        end_date: this.end,
+        month: this.month,
+        sort_by: this.sort_by,
+        // search: this.search,
+      };
+      // Loại bỏ param null/empty
+      const query = Object.entries(params)
+        .filter(([k, v]) => v && v !== '')
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join('&');
+      htmx.ajax('GET', `/app/rates?${query}`, {target: '#ratesTableWrapper'});
+    }
+  }
+}
+</script>

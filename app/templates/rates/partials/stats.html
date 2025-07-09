@@ -1,0 +1,45 @@
+<div class="p-3" id="stats">
+  <div class="flex flex-wrap justify-start gap-4">
+    <!-- Sold Out -->
+    <div class="flex flex-col items-start 
+      bg-gradient-to-r from-red-500 to-orange-400
+      text-white shadow-md rounded-xl px-4 py-3 w-38">
+      <div class="text-sm font-medium uppercase tracking-wide opacity-90">Total Sold Out</div>
+      <div class="text-xl font-bold flex items-center gap-2">
+        {{ total_sold_out }}
+        <span class="text-2xl">🔥</span>
+      </div>
+    </div>
+    <!-- Flex Out -->
+    <div class="flex flex-col items-start 
+      bg-gradient-to-br from-yellow-400 via-yellow-500 to-yellow-700
+      dark:from-yellow-600 dark:via-yellow-700 dark:to-yellow-800
+      text-white shadow-md rounded-xl px-4 py-3 w-38">
+      <div class="text-sm font-medium uppercase tracking-wide opacity-90">Total Flex Out</div>
+      <div class="text-xl font-bold flex items-center gap-2">
+        {{ total_flex_out }}
+        <span class="text-2xl">⚡️</span>
+      </div>
+    </div>
+    <!-- Average OTB -->
+    <div class="flex flex-col items-start 
+      bg-neutral-800
+      text-white shadow-md rounded-xl px-4 py-3 w-38">
+      <div class="text-sm font-medium uppercase tracking-wide opacity-90">Average OTB</div>
+      <div class="text-xl font-bold flex items-center gap-2">
+        {{ avg_otb }}
+        <span class="text-2xl">📊</span>
+      </div>
+    </div>
+    <!-- Average Price -->
+    <div class="flex flex-col items-start 
+      bg-neutral-800
+      text-white shadow-md rounded-xl px-4 py-3 w-45">
+      <div class="text-sm font-medium uppercase tracking-wide opacity-90">Average Price</div>
+      <div class="text-xl font-bold flex items-center gap-2">
+        {{ avg_price }}
+        <span class="text-2xl">💰</span>
+      </div>
+    </div>
+  </div>
+</div>

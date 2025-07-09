@@ -3,61 +3,177 @@
 
 {% block content %}
 
-<div class="mb-4"  x-data="{  
-    sources: {{ available_sources }},
-    activeItem: null,
-}">
-    <div x-init="activeItem = sources[0]" class="text-sm font-medium text-center text-black border-b border-gray-200">
-        <ul class="flex flex-wrap -mb-px">
-            <!-- Loop through available_sources and display the items -->
-            <template x-for="source in sources" :key="source">
-                <li class="me-2">
-                    <a href="#" 
-                       :hx-get="'{% url 'ota' %}?source=' + source" 
-                       hx-target="#content" 
-                       hx-trigger="click" 
-                       hx-swap="outerHTML"
-                       :class="{
-                            'text-blue-600 border-b-2 border-blue-600': activeItem === source,
-                            'text-gray-600 border-transparent': activeItem !== source
-                        }"
-                       @click="activeItem = source"
-                       class="inline-block p-4 rounded-t-lg text-lg hover:text-gray-600 hover:border-gray-300"
-                       aria-current="page">
-                        <span x-text="source"></span>
-                    </a>
-                </li>
-            </template>
-        </ul>
+<div class="mb-4" >
+    <div class="text-sm font-medium text-center text-black border-b border-gray-200">
+       <ul class="flex flex-wrap -mb-px">
+    {% for source in available_sources %}
+        <li class="me-2">
+            <a href="{% url 'ota' %}?source={{ source }}"
+               class="inline-block p-4 rounded-t-lg text-lg hover:text-gray-600 hover:border-gray-300
+                      {% if request.GET.source == source %}
+                          text-blue-600 border-b-2 border-blue-600
+                      {% else %}
+                          text-gray-600 border-transparent
+                      {% endif %}"
+               aria-current="page">
+                {{ source }}
+            </a>
+        </li>
+    {% endfor %}
+</ul>
+
     </div>
 
- <div class="flex flex-wrap justify-start gap-4">
-        <!-- Filter: Base Date -->
-        <div>
-            <label for="base_date" class="block mb-2 text-sm font-medium">Current Date</label>
-            <input type="date" id="base_date" name="base_date"
-                class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5"
-                value="{{ base_date|date:'Y-m-d' }}"
-                :hx-get="'{% url 'ota' %}?source=' + activeItem" 
-                hx-target="#content"
-                hx-trigger="change"
-                hx-include="[name=base_date], [name=compare_date]">
+<div x-data="litepickerSeparate({{ valid_dates|safe }}, '{{ base_date }}', '{{ compare_date }}', '{{ source }}')" x-init="init()" class="mt-6 space-y-4">
+  <div class="flex flex-wrap gap-6 items-end">
+    <!-- Base Date (Current) -->
+    <div class="flex flex-col">
+      <label class="text-sm font-medium mb-1 text-gray-700">
+        Current date (<span x-text="base_date"></span>)
+      </label>
+      <div class="relative">
+        <input x-ref="baseInput"
+               type="text"
+               class="border border-gray-300 pl-10 pr-4 py-2 rounded-md text-sm w-52 bg-white cursor-pointer shadow-sm focus:ring-blue-500 focus:border-blue-500"
+               placeholder="Select"
+               readonly>
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+          📅
         </div>
-
-        <!-- Filter: Compare Date -->
-        <div>
-            <label for="compare_date" class="block mb-2 text-sm font-medium">Date to compare</label>
-            <input type="date" id="compare_date" name="compare_date"
-                class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5"
-                value="{{ compare_date|date:'Y-m-d' }}"
-                :hx-get="'{% url 'ota' %}?source=' + activeItem"
-                hx-target="#content"
-                hx-trigger="change"
-                hx-include="[name=base_date], [name=compare_date]">
+      </div>
+    </div>
+    <div class="flex flex-col">
+      <span>vs .</span>
+    </div>
+    <!-- Compare Date (Older) -->
+    <div class="flex flex-col">
+      <label class="text-sm font-medium mb-1 text-gray-700">
+        Date to compare (<span x-text="compare_date"></span>)
+      </label>
+      <div class="relative">
+        <input x-ref="compareInput"
+               type="text"
+               class="border border-gray-300 pl-10 pr-4 py-2 rounded-md text-sm w-52 bg-white cursor-pointer shadow-sm focus:ring-green-500 focus:border-green-500"
+               placeholder="Select"
+               readonly>
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+          📅
         </div>
-    </div>
+      </div>
     </div>
 
-{% include "ota_reviews/partials/content.html" %}
+    <!-- Month -->
+    <div class="flex flex-col">
+      <label class="text-sm font-medium mb-1 text-gray-700">Select Month</label>
+      <div class="relative">
+        <input type="month" id="monthInput" name="month"
+              class="border border-gray-300 pl-10 pr-4 py-2 rounded-md text-sm w-52 bg-white cursor-pointer shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              :value="month" @change="updateParam('month', $event.target.value)">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">📅</div>
+      </div>
+    </div>
+    
+  </div>
+</div>
+
+
+
+    </div>
+
+<div id="OTATableContent" hx-get="{% url 'ota' %}?source={{ source }}&base_date={{ base_date|date:'Y-m-d' }}&compare_date={{ compare_date|date:'Y-m-d' }}"
+              hx-trigger="change" hx-target="#OTATableContent">
+    {% include "ota_reviews/partials/content.html" %}
+</div>
+
+<script>
+function litepickerSeparate(validDates, defaultBase, defaultCompare, source) {
+  return {
+    base_date: defaultBase,
+    compare_date: defaultCompare,
+    source: source,
+
+    init() {
+      const self = this;
+      const validSet = new Set(validDates);
+
+      const lockDays = this.getInvalidDays(validDates);
+
+      // Compare Date (Older)
+      new Litepicker({
+        element: this.$refs.compareInput,
+        format: 'YYYY-MM-DD',
+        autoApply: true,
+        singleMode: true,
+        lockDays: lockDays,
+        setup: (picker) => {
+          picker.on('selected', (date) => {
+            const str = date.format('YYYY-MM-DD');
+            if (validSet.has(str)) {
+              self.compare_date = str;
+              self.$refs.compareInput.value = str;
+              self.maybeFetch();
+            } else {
+              self.$refs.compareInput.value = '';
+              self.compare_date = null;
+            }
+          });
+        }
+      });
+
+      // Base Date (Current)
+      new Litepicker({
+        element: this.$refs.baseInput,
+        format: 'YYYY-MM-DD',
+        autoApply: true,
+        singleMode: true,
+        lockDays: lockDays,
+        setup: (picker) => {
+          picker.on('selected', (date) => {
+            const str = date.format('YYYY-MM-DD');
+            if (validSet.has(str)) {
+              self.base_date = str;
+              self.$refs.baseInput.value = str;
+              self.maybeFetch();
+            } else {
+              self.$refs.baseInput.value = '';
+              self.base_date = null;
+            }
+          });
+        }
+      });
+
+      // Gán giá trị mặc định khi load lại
+      if (self.base_date) this.$refs.baseInput.value = self.base_date;
+      if (self.compare_date) this.$refs.compareInput.value = self.compare_date;
+    },
+
+    getInvalidDays(validDates) {
+      const validSet = new Set(validDates);
+      const start = new Date("2024-01-01");
+      const end = new Date("2026-12-31");
+      const invalid = [];
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const str = d.toISOString().split('T')[0];
+        if (!validSet.has(str)) invalid.push(str);
+      }
+      return invalid;
+    },
+
+    maybeFetch() {
+      // Khi đủ 2 giá trị thì gửi request
+      if (this.base_date && this.compare_date) {
+        const params = new URLSearchParams({
+          source: this.source,
+          base_date: this.base_date,
+          compare_date: this.compare_date
+        }).toString();
+        htmx.ajax('GET', `{% url 'ota' %}?${params}`, {target: '#OTATableContent'});
+      }
+    }
+  }
+}
+</script>
+
+
 
 {% endblock %}

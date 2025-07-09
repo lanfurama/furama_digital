@@ -1,0 +1,120 @@
+{% for row in rows %}
+<tr class="even:bg-gray-100 {% if row.date_status == 'today' %}bg-gradient-to-r from-green-100 to-emerald-100 font-semibold{% endif %}">
+  <!-- Reported Date -->
+  <td class="px-4 py-2 align-middle">
+    {% if row.date_status == 'today' %}
+      <span class="inline-flex items-center justify-center text-white bg-gradient-to-r from-green-500 to-emerald-600 font-semibold p-1 rounded-full">
+        {{ row.reported_date }}
+      </span>
+    {% else %}
+      <span class="font-medium">{{ row.reported_date }}</span>
+    {% endif %}
+  </td>
+
+  <!-- Data cells -->
+  {% for cell in row.cells %}
+  <td class="px-4 py-2 align-top text-sm">
+    <div class="flex items-center gap-1">
+  <span
+    class="
+      px-2 py-0.5 rounded-md text-[13px] font-medium whitespace-nowrap
+      {% if cell.trend == 'up' %}
+        text-emerald-600 font-semibold
+      {% elif cell.trend == 'down' %}
+        text-rose-600 font-semibold
+      {% else %}
+        text-gray-600
+      {% endif %}
+    "
+  >
+    
+{% if cell.display_current_value == 'Sold out' %}
+<span class="text-red-500 line-through font-medium text-xs inline-flex items-center gap-1">
+ Sold out
+</span> <span class="text-sm">🔥</span>
+{% elif cell.display_current_value == 'Flex out' %}
+ <span class="bg-yellow-300 text-yellow-900 text-xs px-2 py-1 rounded-full shadow">⚡ Flex out</span>
+{% else %}
+  {{ cell.display_current_value }}
+
+  {%if cell.field == 'furama_resort' %}
+  <div class="bg-gradient-to-r from-gray-100 to-gray-200 text-blue-800 px-2 py-0.5 rounded-md text-[13px] font-medium border border-green-300">
+    <span class="text-xs font-semibold ml-1">
+      Suggested: {{ row.suggested_furama_rate }}
+    </span>
+    <!-- Tooltip chứa rate_note -->
+    <span class="ml-2 text-[11px] italic text-gray-500 relative group">
+      <span class="hover:text-blue-600 cursor-pointer text-[13px]">i</span> <!-- Biểu tượng thông tin -->
+      <!-- Tooltip hiển thị khi hover -->
+      <div class="tooltip absolute z-[999] invisible group-hover:visible opacity-0 group-hover:opacity-100 transition
+                  bottom-full left-1/2 transform -translate-x-1/2 mt-1 w-auto bg-white dark:bg-neutral-800 
+                  border border-gray-300 dark:border-neutral-600 shadow-lg text-sm p-3 rounded-lg whitespace-nowrap">
+    <span class="text-white text-xs">{{ row.rate_note }}</span>
+  </div>
+    </span>
+  </div>
+  {% endif %}
+
+{% endif %}
+
+
+  {% if row.max_price == cell.current_value %} <span class="text-[10px] font-semibold ml-1 bg-red-500 text-white p-1 rounded-md">Highest</span>{% endif %}
+  {% if row.min_price == cell.current_value %} <span class="text-[10px] font-semibold bg-neutral-800 text-white p-1 rounded-md">Lowest</span>{% endif %}
+  </span>
+  {% if cell.trend == 'up' %}
+    <svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+      <path d="M5 10l5-5 5 5H5z" />
+    </svg>
+  {% elif cell.trend == 'down' %}
+    <svg class="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+      <path d="M15 10l-5 5-5-5h10z" />
+    </svg>
+  {% endif %}
+</div>
+
+
+    {% if cell.percent %}
+    <div class="relative group mt-1 inline-block">
+      <span class="
+        inline-flex items-center gap-1 text-[11px] font-semibold px-3 rounded-full shadow-sm
+        {% if cell.trend == 'up' %}
+          bg-gradient-to-r from-green-500 to-emerald-400 text-white
+        {% elif cell.trend == 'down' %}
+          bg-gradient-to-r from-red-100 to-rose-200 text-red-800
+        {% else %}
+          bg-gray-100 text-gray-700
+        {% endif %}
+      ">
+      {{ cell.percent }}
+      </span>
+
+
+      {% if cell.tooltip %}
+      <!-- Tooltip -->
+     <div class="tooltip absolute z-[999] invisible group-hover:visible opacity-0 group-hover:opacity-100 transition
+            bottom-full left-1/2 transform -translate-x-1/2 mt-1 w-72 bg-white dark:bg-neutral-800 
+            border border-gray-300 dark:border-neutral-600 shadow-lg text-sm p-3 rounded-lg">
+        <table class="w-full text-xs text-left border-collapse">
+          <tbody>
+            <tr>
+              <td class="py-1 dark:text-neutral-300">Current ({{ cell.current_updated_date }})</td>
+              <td class="py-1 dark:text-neutral-300">{{ cell.display_current_value }}</td>
+            </tr>
+            <tr>
+              <td class="py-1 dark:text-neutral-300">Change</td>
+              <td class="py-1 dark:text-neutral-300">{{ cell.percent }} ({{ cell.change_value }})</td>
+            </tr>
+            <tr>
+              <td class="py-1 dark:text-neutral-300">{{ cell.compare_updated_date|date:'Y/m/d' }}</td>
+              <td class="py-1 dark:text-neutral-300">{{ cell.display_compare_value }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </td>
+  {% endfor %}
+</tr>
+{% endfor %}
