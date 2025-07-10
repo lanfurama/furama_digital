@@ -66,34 +66,19 @@ def create_cell(field, current_value, compare_value, latest_date=None, compare_d
     return result
     
 def calculate_rate_statistics(rows, columns):
-    total_sold_out, total_flex_out, total_otb, total_price = 0, 0, 0, 0
-    count, price_count = len(rows), 0
+    total_sold_out, total_flex_out = 0, 0
 
     for row in rows:
-        if row.get('cells') and len(row['cells']) > 0:
-            my_otb = row['cells'][0].get('current_value')
-            if my_otb is not None:
-                total_otb += my_otb
-
         # Calculate total price for resorts (furama_resort, hyatt_regency, etc.)
         for cell in row.get('cells', [])[2:]:  # Starting from "furama_resort" column
-            value = cell.get('current_value')
             value_display = cell.get('display_current_value')
-
-            if value is not None:
-                total_price += value
-                price_count += 1
 
             if value_display == "Sold out":
                 total_sold_out += 1
             elif value_display == "Flex out":
                 total_flex_out += 1
 
-    # Calculate averages
-    avg_otb = total_otb / count if count > 0 else 0
-    avg_price = total_price / price_count if price_count > 0 else 0
-
-    return total_sold_out, total_flex_out, format_currency(avg_otb, is_percent=True), format_currency(avg_price)
+    return total_sold_out, total_flex_out
 
 # ========================
 # Constants
@@ -284,9 +269,8 @@ def build_comparison_rows(grouped_rates, start_dt, end_dt, month_str=None):
             "min_price": min_price,
             "price_gap": price_gap,
             "avg_price": avg_price,
-            "furama_price": furama_price,
             "suggested_furama_rate": format_currency(suggested_furama_rate),
-            "rate_note": rate_note,
+            "suggested_furama_rate_note": rate_note,
         }
 
         for field, _ in COLUMNS:
@@ -361,6 +345,31 @@ def sort_rows(rows, sort_by):
         rows.sort(key=lambda r: r["price_gap"], reverse=True)
 
 
+def calculate_column_averages(rows, columns):
+    summary = []
+
+    for idx, (field, _) in enumerate(columns):
+        total = 0
+        count = 0
+        is_percent = field in ["my_otb", "market_demand"]
+
+        for row in rows:
+            cell = row["cells"][idx]
+            value = parse_number(cell.get("current_value"))
+            if value is not None and not is_nan(value):
+                total += value
+                count += 1
+
+        if count:
+            average = total / count
+            formatted = format_currency(round(average, 0), is_percent=is_percent)
+        else:
+            formatted = None
+
+        summary.append(formatted)
+
+    return summary
+
 # ========================
 # View
 # ========================
@@ -385,7 +394,7 @@ def index(request):
     rows = build_comparison_rows(grouped_rates, start_dt, end_dt, month_str)
     sort_by = request.GET.get("sort_by", "oldest_reported")
     sort_rows(rows, sort_by)
-    total_sold_out, total_flex_out, avg_otb, avg_price = calculate_rate_statistics(rows, COLUMNS)
+    total_sold_out, total_flex_out = calculate_rate_statistics(rows, COLUMNS)
 
     # 5. Tạo context
     context = {
@@ -398,11 +407,10 @@ def index(request):
         "valid_dates": valid_dates, 
         "total_sold_out": total_sold_out,  # Total sold out
         "total_flex_out": total_flex_out,  # Total flex out
-        "avg_otb": avg_otb,  # Average OTB
-        "avg_price": avg_price,  # Average price
         "month": month_str, 
         "sort_by": sort_by,
         "latest_updated_date": latest_updated_date.strftime("%Y-%m-%d") if latest_updated_date else None,
+        "column_averages": calculate_column_averages(rows, COLUMNS),
     }
 
     if request.headers.get("HX-Request") == "true":

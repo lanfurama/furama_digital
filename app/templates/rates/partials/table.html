@@ -2,15 +2,9 @@
 <div class="max-h-[60vh] md:max-h-[70vh] lg:max-h-[60vh] overflow-y-auto">
   
 <table class="w-full text-sm text-left table-auto" >
-<div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-2 font-semibold max-w-[230px]">
-  Latest Updated: {{ latest_updated_date }}
-</div>
-
-    <thead style="position: sticky; top: 0; z-index: 10;
-                    background: white;
-                    ">
+    <thead style="position: sticky; top: 0; z-index: 10; background: white;">
        <tr>
-          <th class="p-3 font-bold border-b-2 border-blue-200">
+          <th class="p-3 font-bold">
             <div class="flex items-center">
               Reported Date
             <a href="#" hx-get="rates?month={{ month }}&sort_by={% if sort_by == 'latest-reported' %}oldest-reported{% else %}latest-reported{% endif %}" hx-target="#ratesTableWrapper">
@@ -21,9 +15,22 @@
           </div>
           </th>
           {% for col_key, col_label in columns %}
-            <th class="p-3 font-bold border-b-2 border-blue-200 {% if col_key == 'furama_resort' %}text-blue-800 bg-gradient-to-r from-blue-100 to-green-100{% endif %}">{{ col_label }}</th>
+            <th class="p-3 font-bold {% if col_key == 'furama_resort' %}text-blue-800 bg-gradient-to-r from-blue-100 to-green-100{% endif %}">{{ col_label }}</th>
           {% endfor %}
         </tr>
+         <tr class="bg-gradient-to-r from-sky-200 via-indigo-200 to-purple-200 font-bold text-black">
+      <td class="px-4 py-2"></td>
+      {% for avg in column_averages %}
+        <td class="px-4 py-2 text-[13px]">
+          {% if avg %}
+            {{ avg }}
+          {% else %}
+            -
+          {% endif %}
+        </td>
+  {% endfor %}
+</tr>
+  
     </thead>
     <tbody>
         {% include "rates/partials/table_rows.html" %}
