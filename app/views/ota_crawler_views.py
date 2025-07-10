@@ -6,19 +6,13 @@ from django.http import JsonResponse
 from datetime import datetime
 
 
-def fetch_reviews():
-    return OtaReview.objects.all().order_by('-created_at')
-
-
 def get_compare_review(current_review, base_date=None, compare_date=None):
     query = OtaReview.objects.filter(
         url=current_review.url,
         source=current_review.source
     )
-    if compare_date:
-        query = query.filter(created_at__date=compare_date)
-
-    return query.order_by('-created_at').first()
+    
+    return query.filter(created_at__date=compare_date).first()
 
 
 def get_score_details(current_review, compare_review):
@@ -35,6 +29,7 @@ def get_score_details(current_review, compare_review):
     for crit_id, score in current_scores.items():
         prev = prev_scores.get(crit_id)
         prev_value = prev.value if prev else 0
+
         delta = round(score.value - prev_value, 2) if prev_value > 0 else 0
         result.append({
             "criterion": score.criterion.label,
@@ -63,17 +58,11 @@ def process_review(review, compare_review, base_date=None, compare_date=None):
 
     display_resort = normalize_resort_name(review.resort, predefined_order)
 
-    if review.rating is not None and compare_review and compare_review.rating is not None:
-        # Nếu có rating so sánh, tính delta
-        rating_delta = review.rating - compare_review.rating
+    if compare_review:
+        rating_delta = review.rating - compare_review.rating if review.rating is not None and compare_review.rating is not None else 0
+        total_reviews_delta = review.total_reviews - compare_review.total_reviews if review.total_reviews is not None and compare_review.total_reviews is not None else 0
     else:
-        # Nếu không có review so sánh, delta là 0
         rating_delta = 0
-    # Nếu có review so sánh, tính tổng số lượng review delta
-    if review.total_reviews is not None and compare_review and compare_review.total_reviews is not None:
-        total_reviews_delta = review.total_reviews - compare_review.total_reviews
-    else:
-        # Nếu không có review so sánh, delta là 0
         total_reviews_delta = 0
 
     scores = get_score_details(review, compare_review)
@@ -152,6 +141,8 @@ def normalize_resort_name(original_name, predefined_order):
     for keyword in predefined_order:
         if keyword.lower() in original_lower:
             return keyword  # Dùng tên ngắn trong predefined_order
+        if(original_name == 'Only me, Retreat, Vietnam') :
+            return 'Naman'
     return original_name
 
 
@@ -192,12 +183,24 @@ def get_reviews_from_db(request):
     source_param = request.GET.get('source')
     base_date_str = request.GET.get('base_date')
     compare_date_str = request.GET.get('compare_date')
-    month_param = request.GET.get('month')
+    month_param = request.GET.get('month') or datetime.now().strftime("%Y-%m")
 
     base_date = datetime.strptime(base_date_str, "%Y-%m-%d") if base_date_str else None
     compare_date = datetime.strptime(compare_date_str, "%Y-%m-%d") if compare_date_str else None
 
-    reviews = fetch_reviews()
+    reviews = OtaReview.objects.all()
+
+    # Lọc theo source_param
+    if source_param:
+        reviews = reviews.filter(source=source_param)
+
+    # Lọc theo base_date và compare_date nếu cần
+    if base_date:
+        reviews = reviews.filter(created_at__gte=base_date)
+    
+
+    all_reviews = OtaReview.objects.filter(source=source_param).order_by('-created_at')
+    valid_dates = sorted(set(review.created_at.strftime('%Y-%m-%d') for review in all_reviews))
 
     if month_param:
         reviews = [
@@ -205,10 +208,9 @@ def get_reviews_from_db(request):
             if r.created_at.strftime('%Y-%m') == month_param
         ]
 
-    valid_dates = sorted(list({r.created_at.date().isoformat() for r in reviews}))
     latest_updated_time = None
 
-    all_sources = list({review.source for review in reviews})
+    all_sources = list({review.source for review in all_reviews})
     if not source_param and all_sources:
         source_param = all_sources[0]
 
@@ -236,6 +238,7 @@ def get_reviews_from_db(request):
         "Fusion",
         "Furama Villas",
     ]
+    
 
     order = predefined_order  # hoặc lấy từ dữ liệu nếu muốn dynamic
 
@@ -278,8 +281,4 @@ def ota_crawler_home(request):
         return render(request, "ota_reviews/partials/content.html", context)
     
     return render(request, "ota_reviews/index.html", context)
-    # return JsonResponse({
-    #     'reviews': data['reviews'],
-    #     'available_sources': data['available_sources'],
-    #     'latest_updated_time': data['latest_updated_time']
-    # }, safe=False)  # Trả về JsonResponse thay vì render template
+    # return JsonResponse(context)  

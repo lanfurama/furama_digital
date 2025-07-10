@@ -3,28 +3,28 @@
 
 {% block content %}
 
-<div class="mb-4" >
     <div class="text-sm font-medium text-center text-black border-b border-gray-200">
        <ul class="flex flex-wrap -mb-px">
-    {% for source in available_sources %}
-        <li class="me-2">
-            <a href="{% url 'ota' %}?source={{ source }}"
-               class="inline-block p-4 rounded-t-lg text-lg hover:text-gray-600 hover:border-gray-300
-                      {% if request.GET.source == source %}
-                          text-blue-600 border-b-2 border-blue-600
-                      {% else %}
-                          text-gray-600 border-transparent
-                      {% endif %}"
-               aria-current="page">
-                {{ source }}
-            </a>
-        </li>
-    {% endfor %}
-</ul>
+          {% for source in available_sources %}
+              <li class="me-2">
+                  <a href="{% url 'ota' %}?source={{ source }}"
+                    class="inline-block p-4 rounded-t-lg text-lg hover:text-gray-600 hover:border-gray-300
+                            {% if request.GET.source == source %}
+                                text-blue-600 border-b-2 border-blue-600
+                            {% else %}
+                                text-gray-600 border-transparent
+                            {% endif %}"
+                    aria-current="page">
+                      {{ source }}
+                  </a>
+              </li>
+          {% endfor %}
+      </ul>
 
     </div>
 
-<div x-data="litepickerSeparate({{ valid_dates|safe }}, '{{ base_date }}', '{{ compare_date }}', '{{ source }}')" x-init="init()" class="mt-6 space-y-4">
+    <div class="max-w-7xl mx-auto px-4">
+<div x-data="litepickerSeparate({{ valid_dates|safe }}, '{{ base_date }}', '{{ compare_date }}', '{{ source }}', '{{ month|default:'' }}')" x-init="init()" class="mt-6 space-y-4">
   <div class="flex flex-wrap gap-6 items-end">
     <!-- Base Date (Current) -->
     <div class="flex flex-col">
@@ -41,9 +41,6 @@
           📅
         </div>
       </div>
-    </div>
-    <div class="flex flex-col">
-      <span>vs .</span>
     </div>
     <!-- Compare Date (Older) -->
     <div class="flex flex-col">
@@ -75,22 +72,22 @@
     
   </div>
 </div>
+</div>
 
-
-
-    </div>
 
 <div id="OTATableContent" hx-get="{% url 'ota' %}?source={{ source }}&base_date={{ base_date|date:'Y-m-d' }}&compare_date={{ compare_date|date:'Y-m-d' }}"
               hx-trigger="change" hx-target="#OTATableContent">
     {% include "ota_reviews/partials/content.html" %}
 </div>
 
+
 <script>
-function litepickerSeparate(validDates, defaultBase, defaultCompare, source) {
+function litepickerSeparate(validDates, defaultBase, defaultCompare, source, month) {
   return {
     base_date: defaultBase,
     compare_date: defaultCompare,
     source: source,
+    month: month,
 
     init() {
       const self = this;
@@ -111,7 +108,7 @@ function litepickerSeparate(validDates, defaultBase, defaultCompare, source) {
             if (validSet.has(str)) {
               self.compare_date = str;
               self.$refs.compareInput.value = str;
-              self.maybeFetch();
+              self.fetch();
             } else {
               self.$refs.compareInput.value = '';
               self.compare_date = null;
@@ -133,7 +130,7 @@ function litepickerSeparate(validDates, defaultBase, defaultCompare, source) {
             if (validSet.has(str)) {
               self.base_date = str;
               self.$refs.baseInput.value = str;
-              self.maybeFetch();
+              self.fetch();
             } else {
               self.$refs.baseInput.value = '';
               self.base_date = null;
@@ -159,16 +156,22 @@ function litepickerSeparate(validDates, defaultBase, defaultCompare, source) {
       return invalid;
     },
 
-    maybeFetch() {
-      // Khi đủ 2 giá trị thì gửi request
-      if (this.base_date && this.compare_date) {
+    updateParam(param, value) {
+        this[param] = value;
+        this.fetch();
+      },
+
+    fetch() {
         const params = new URLSearchParams({
           source: this.source,
           base_date: this.base_date,
-          compare_date: this.compare_date
+          compare_date: this.compare_date,
+          month : this.month
         }).toString();
+
+        const fullUrl = `/app/ota?${params}`;
+        window.history.replaceState(null, '', fullUrl);
         htmx.ajax('GET', `{% url 'ota' %}?${params}`, {target: '#OTATableContent'});
-      }
     }
   }
 }

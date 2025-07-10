@@ -1,42 +1,66 @@
 {% for source, group in reviews.items %}
-<div class="mb-10">
-  <div class="rounded-2xl shadow-md overflow-hidden border border-gray-100 bg-white">
-    <!-- Table Header Card -->
+
+    <div class="max-w-7xl mx-auto px-4 relative">
+      <div id="loading-spinner"
+          class="absolute inset-0 z-20 flex items-center justify-center bg-white/70 backdrop-blur-sm opacity-0 transition-opacity duration-200 pointer-events-none">
+        <div class="relative">
+          <div class="h-12 w-12 rounded-full border-4 border-indigo-200 border-t-transparent animate-spin"></div>
+          <svg class="absolute inset-0 m-auto h-6 w-6 text-indigo-600 animate-pulse"
+              xmlns="http://www.w3.org/2000/svg" fill="none"
+              viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M13 16h-1v-4h-1m1-4h.01M12 20c4.418 0 8-3.582 8-8s-3.582-8-8-8-8 3.582-8 8 3.582 8 8 8z" />
+          </svg>
+        </div>
+      </div>
+
+              <script>
+          document.body.addEventListener("htmx:beforeRequest", function(evt) {
+            document.getElementById("loading-spinner").classList.remove("opacity-0");
+            document.getElementById("loading-spinner").classList.remove("opacity-100");
+          });
+          document.body.addEventListener("htmx:afterRequest", function(evt) {
+            document.getElementById("loading-spinner").classList.remove("opacity-100");
+            document.getElementById("loading-spinner").classList.remove("opacity-0");
+          });
+        </script>
+        
+      <!-- Table Header Card -->
     <div class="px-4 py-2 border-b border-gray-100 bg-white flex flex-col gap-1">
       <div class="flex items-center justify-between flex-wrap gap-2">
-        <span class="text-blue-900 text-2xl font-bold uppercase tracking-wide">{{ source }}</span>
+        <span class="text-blue-900 text-2xl font-bold uppercase tracking-wide">{{ source }} | <span class="text-sm">Latest updated: {{ latest_updated_time|date:'Y-m-d' }}</span> </span>
         {% if latest_updated_time %}
           <div class="flex flex-col sm:flex-row sm:items-center gap-1">
             {% if compare_date %}
               <span class="bg-neutral-800 text-white text-base font-semibold px-3 py-1 rounded-full ml-2">
-                Comparing: <b>{{ compare_date }}</b> → <b>{{ latest_updated_time }}</b>
+                Comparing: <b>{{ base_date }}</b> → <b>{{ compare_date }}</b>
               </span>
             {% endif %}
-            <span class="text-sm">Latest updated: <b>{{ latest_updated_time|date:'Y-m-d' }}</b></span>
           </div>
         {% endif %}
       </div>
     </div>
-    <div class="overflow-x-auto">
-      <table class="min-w-full text-base bg-white">
+
+     <div class="overflow-x-auto rounded-lg border shadow-sm bg-white">
+       <table class="min-w-full text-gray-800">
         <thead>
           <tr class="text-blue-800 text-left bg-gradient-to-r from-blue-100 to-green-100 sticky top-0 z-10 border-b-2 border-blue-200 shadow-sm">
-            <th class="px-2">Resort</th>
-            <th class="px-4 py-3">Rating </th>
-            <th class="px-4 py-3">Total Reviews</th>
+            <th class="px-2 py-1">Resort</th>
+            <th class="px-2 py-1">Rating </th>
+            <th class="px-2 py-1">Total Reviews</th>
             {% for key in group.criteria_keys %}
-              <th class="px-4 py-3">{{ key|capfirst }}</th>
+              <th class="px-2 py-1">{{ key|capfirst }}</th>
             {% endfor %}
-            <th class="px-4 py-3">URL</th>
+            <th class="px-2 py-1">URL</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
           {% for review in group.reviews %}
-          <tr class="hover:bg-yellow-50 transition rounded-xl">
+          <tr>
             <!-- Resort with avatar -->
-            <td class="px-4 py-2 font-semibold flex items-center gap-3 bg-white">
-              <span class="w-8 h-8 bg-gradient-to-r from-blue-100 to-green-100 text-blue-800 rounded-full flex items-center justify-center font-bold text-lg shadow-sm">{{ review.resort|slice:":1" }}</span>
-              <span>{{ review.resort }}</span>
+           <td class="px-2 py-1 font-semibold flex items-center gap-2 bg-white whitespace-nowrap">
+              <span class="w-6 h-6 text-xs bg-gradient-to-br from-blue-200 to-green-200 text-blue-800 rounded-full flex items-center justify-center shadow">{{ review.resort|slice:":1" }}</span>
+              <span class="truncate max-w-[120px]">{{ review.resort }}</span>
             </td>
             <!-- Rating -->
             <td class="px-2 py-2 border font-semibold text-left">
@@ -45,9 +69,9 @@
                   <span class="text-[15px] font-semibold {% if review.highest_rating %}text-green-600 font-bold{% elif review.lowest_rating %}text-red-500 font-bold{% endif %} text-gray-800 tracking-wide">{{ review.rating }}</span>
                 </div>
                 {% if review.increased_rating > 0 %}
-                <span class="text-[11px] text-green-800 bg-gradient-to-r from-green-100 via-green-200 to-green-100 px-1.5 py-0.5 rounded ml-1" title="Up">+{{ review.increased_rating }}</span>
+                <span class="text-[11px] text-green-800 bg-gradient-to-r from-green-100 via-green-200 to-green-100 px-1.5 py-0.5 rounded ml-1" title="{{ review.compare_review_updated_at}}">+{{ review.increased_rating }}</span>
                 {% elif review.decreased_rating > 0 %}
-                <span class="text-[11px] text-red-700 bg-gradient-to-r from-red-100 via-red-200 to-red-100 px-1.5 py-0.5 rounded ml-1" title="Down">-{{ review.decreased_rating }}</span>
+                <span class="text-[11px] text-red-700 bg-gradient-to-r from-red-100 via-red-200 to-red-100 px-1.5 py-0.5 rounded ml-1" title="{{ review.compare_review_updated_at}}">-{{ review.decreased_rating }}</span>
                 {% endif %}
               </div>
             </td>
@@ -58,9 +82,9 @@
                   <span class="text-[15px] font-semibold {% if review.highest_total_reviews %}text-green-600 font-bold{% elif review.lowest_total_reviews %}text-red-500 font-bold{% endif %} text-gray-800 tracking-wide">{{ review.total_reviews }}</span>
                 </div>
                 {% if review.increased_total_reviews > 0 %}
-                <span class="text-[11px] text-green-800 bg-gradient-to-r from-green-100 via-green-200 to-green-100 px-1.5 py-0.5 rounded ml-1" title="Up">+{{ review.increased_total_reviews }}</span>
+                <span class="text-[11px] text-green-800 bg-gradient-to-r from-green-100 via-green-200 to-green-100 px-1.5 py-0.5 rounded ml-1" title="{{ review.compare_review_updated_at}}">+{{ review.increased_total_reviews }}</span>
                 {% elif review.decreased_total_reviews > 0 %}
-                <span class="text-[11px] text-red-700 bg-gradient-to-r from-red-100 via-red-200 to-red-100 px-1.5 py-0.5 rounded ml-1" title="Down">-{{ review.decreased_total_reviews }}</span>
+                <span class="text-[11px] text-red-700 bg-gradient-to-r from-red-100 via-red-200 to-red-100 px-1.5 py-0.5 rounded ml-1" title="{{ review.compare_review_updated_at}}">-{{ review.decreased_total_reviews }}</span>
                 {% endif %}
               </div>
             </td>
@@ -82,9 +106,9 @@
                     </div>
                     <div class="w-1/2 flex justify-end items-center">
                       {% if matched_score.increased_value > 0 %}
-                        <span class="text-[11px] text-green-800 bg-gradient-to-r from-green-100 via-green-200 to-green-100 px-1.5 py-0.5 rounded ml-1" title="Up">+{{ matched_score.increased_value }}</span>
+                        <span class="text-[11px] text-green-800 bg-gradient-to-r from-green-100 via-green-200 to-green-100 px-1.5 py-0.5 rounded ml-1" title="{{ review.compare_review_updated_at}}">+{{ matched_score.increased_value }}</span>
                       {% elif matched_score.decreased_value > 0 %}
-                        <span class="text-[11px] text-red-700 bg-gradient-to-r from-red-100 via-red-200 to-red-100 px-1.5 py-0.5 rounded ml-1" title="Down">-{{ matched_score.decreased_value }}</span>
+                        <span class="text-[11px] text-red-700 bg-gradient-to-r from-red-100 via-red-200 to-red-100 px-1.5 py-0.5 rounded ml-1" title="{{ review.compare_review_updated_at}}">-{{ matched_score.decreased_value }}</span>
                       {% endif %}
                     </div>
                   </div>
@@ -103,6 +127,6 @@
         </tbody>
       </table>
     </div>
-  </div>
-</div>
+    </div>
+
 {% endfor %}

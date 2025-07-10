@@ -66,6 +66,8 @@ class NaverCrawler(BaseCrawler):
                     valid_ratings_with_labels[translated_label.lower()] = score
             except ValueError:
                 continue  # Skip if the score is not a valid float
+        mentioning = soup.find('small', class_='NaverReview_sub__yM0Cp').text.strip().replace(",", "")
+        valid_ratings_with_labels['mentioning'] = float(mentioning)
         return valid_ratings_with_labels
     
     def scroll_to_end_of_div(self, driver, div_class):
@@ -91,12 +93,13 @@ class NaverCrawler(BaseCrawler):
         self.create_driver()  # Tạo driver nếu chưa có
         try:
             self.driver.get(url) 
-            self.scroll_to_end_of_div(self.driver, "Layout_list_container__qcdsL")
+            self.scroll_to_end_of_div(self.driver, "Layout_inner__R0M1M")
             soup = self.get_soup(url)
             title, rating = self.extract_resort_info(soup)
             translated_title = asyncio.run(self.translate_text(title)) if title else None
             total_reviews = self.extract_total_reviews(soup)
             scores = self.extract_scores(soup)
+            ""
 
             return {
                 "resort": translated_title,

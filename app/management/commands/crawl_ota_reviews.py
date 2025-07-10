@@ -6,7 +6,7 @@ from app.ota_crawlers.agoda import AgodaCrawler
 from app.ota_crawlers.expedia import ExpediaCrawler
 from app.ota_crawlers.tripadvisor import TripAdvisorCrawler
 from app.ota_crawlers.naver import NaverCrawler
-from app.ota_crawlers.googlereview import GoogleReviewCrawler
+from app.ota_crawlers.google import GoogleReviewCrawler
 from app.utils import save_review_data
 
 class Command(BaseCommand):
@@ -36,8 +36,8 @@ class Command(BaseCommand):
                     continue
                 
                 # Lưu kết quả vào cơ sở dữ liệu nếu cần
-                save_review_data(result, crawler)
-                # results.append(result)
+                # save_review_data(result, crawler)
+                results.append(result)
 
         # Đảm bảo rằng các driver selenium được đóng sau khi crawl xong
         for crawler in crawlers:
