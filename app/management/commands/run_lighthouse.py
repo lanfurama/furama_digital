@@ -1,19 +1,3 @@
-# from django.core.management.base import BaseCommand
-# from app.services.automation.lighthouse.fetch_rates import LighthouseRateFetcher
-
-# class Command(BaseCommand):
-#     help = "Tự động fetch rates từ Lighthouse"
-
-#     def handle(self, *args, **kwargs):
-#         fetcher = LighthouseRateFetcher(headless=False)
-#         try:
-#             self.stdout.write("Đang bắt đầu lấy dữ liệu từ Lighthouse...")
-#             fetcher.login()
-#             result = fetcher.fetch_rates()
-#             self.stdout.write(str(result))
-#         finally:
-#             self.stdout.write('Done !')
-#             fetcher.close()
 
 
 from django.core.management.base import BaseCommand

@@ -50,7 +50,6 @@ def create_cell(field, current_value, compare_value, latest_date=None, compare_d
     if compare_value not in [None, 0, -1] and not is_nan(compare_value):
         try:
             percent = ((current_value - compare_value) / compare_value) * 100
-            percent = max(min(percent, 100), -100)
             result.update({
                 "field": field,
                 "display_compare_value": format_currency(compare_value, is_percent),
@@ -66,7 +65,12 @@ def create_cell(field, current_value, compare_value, latest_date=None, compare_d
     return result
     
 def calculate_rate_statistics(rows, columns):
-    total_sold_out, total_flex_out = 0, 0
+    total_sold_out = 0
+    total_flex_out = 0
+    highest_price = 0
+    highest_price_resort = None
+    lowest_price = float("inf")
+    lowest_price_resort = None
 
     for row in rows:
         # Calculate total price for resorts (furama_resort, hyatt_regency, etc.)
@@ -76,9 +80,29 @@ def calculate_rate_statistics(rows, columns):
             if value_display == "Sold out":
                 total_sold_out += 1
             elif value_display == "Flex out":
-                total_flex_out += 1
+                total_flex_out += 1  
 
-    return total_sold_out, total_flex_out
+        # Lọc giá trị hợp lệ (giá > 0)
+        row_high = row.get("highest_price")
+        row_high_resort = row.get("highest_price_resort")
+        if isinstance(row_high, (int, float)) and row_high > 0 and row_high != -1:
+            if row_high > highest_price:
+                highest_price = row_high
+                highest_price_resort = row_high_resort
+
+        row_low = row.get("lowest_price")
+        row_low_resort = row.get("lowest_price_resort")
+        if isinstance(row_low, (int, float)) and row_low > 0 and row_low != -1:
+            if row_low < lowest_price:
+                lowest_price = row_low
+                lowest_price_resort = row_low_resort
+
+    # Nếu không có giá trị nào -> gán lại 0
+    if lowest_price == float("inf"):
+        lowest_price = 0
+        lowest_price_resort = None
+
+    return total_sold_out, total_flex_out, highest_price, highest_price_resort, lowest_price, lowest_price_resort
 
 # ========================
 # Constants
@@ -99,6 +123,8 @@ COLUMNS = [
     ("premier_village", "Premier Village"),
     ("furama_villas", "Furama Villas"),
 ]
+
+RESORT_LABELS = dict(COLUMNS)
 
 # ========================
 # Helpers
@@ -235,23 +261,27 @@ def build_comparison_rows(grouped_rates, start_dt, end_dt, month_str=None):
             if parsed_val is not None and parsed_val > 0:
                 competitor_prices.append(parsed_val)
 
-        competitor_avg_price = sum(competitor_prices) / len(competitor_prices) if competitor_prices else None
-
-        # Tính giá trị max/min và khoảng cách giá
-        price_values = []
-        for field, _ in COLUMNS[2:]:  # Bỏ qua 2 cột đầu (giả định là OTB, Demand)
+         # Tạo dict chứa {resort_field: price}
+        price_map = {}
+        for field, _ in COLUMNS[2:]:
             val = getattr(latest, field, None)
             parsed_val = parse_number(val)
             if parsed_val is not None and parsed_val > 0:
-                price_values.append(parsed_val)
-        if len(price_values) >= 2:
-            max_price = max(price_values) if price_values else 0
-            min_price = min(price_values) if price_values else 0
-            price_gap = max_price - min_price
-        else:
-            max_price = min_price = price_gap = 0 
+                price_map[field] = parsed_val
 
-        avg_price = sum(price_values) / len(price_values) if price_values else 0
+        if len(price_map) >= 2:
+            highest_price = max(price_map.values())
+            lowest_price = min(price_map.values())
+            price_gap = highest_price - lowest_price
+            highest_key = max(price_map, key=price_map.get)
+            lowest_key = min(price_map, key=price_map.get)
+            highest_price_resort = RESORT_LABELS.get(highest_key, highest_key)
+            lowest_price_resort = RESORT_LABELS.get(lowest_key, lowest_key)
+        else:
+            highest_price = lowest_price = price_gap = 0
+            highest_price_resort = lowest_price_resort = None 
+
+        competitor_avg_price = sum(competitor_prices) / len(competitor_prices) if competitor_prices else None
         otb = parse_number(getattr(latest, "my_otb", 0))
         demand = parse_number(getattr(latest, "market_demand", 0))
         suggested_furama_rate, rate_note = get_suggested_furama_resort_rate(report_date, furama_price, otb, demand, competitor_avg_price)
@@ -265,10 +295,12 @@ def build_comparison_rows(grouped_rates, start_dt, end_dt, month_str=None):
                 else "past"
             ),
             "cells": [],
-            "max_price": max_price,
-            "min_price": min_price,
+            "highest_price": highest_price,
+            "lowest_price": lowest_price,
+            "highest_price_resort": highest_price_resort,
+            "lowest_price_resort": lowest_price_resort,
             "price_gap": price_gap,
-            "avg_price": avg_price,
+            "suggested_furama_rate_value" : suggested_furama_rate,
             "suggested_furama_rate": format_currency(suggested_furama_rate),
             "suggested_furama_rate_note": rate_note,
         }
@@ -313,25 +345,6 @@ def sort_rows(rows, sort_by):
     elif sort_by == "oldest-reported":
         rows.sort(key=lambda r: parse_date_str(r["reported_date"]))
 
-    elif sort_by == "highest_price":
-        rows.sort(
-            key=lambda r: next(
-                (cell.get("current_value") or 0 for cell in r["cells"][2:]
-                 if cell.get("current_value") is not None),
-                0
-            ),
-            reverse=True
-        )
-
-    elif sort_by == "lowest_price":
-        rows.sort(
-            key=lambda r: next(
-                (cell.get("current_value") for cell in r["cells"][2:]
-                 if cell.get("current_value") is not None),
-                float("inf")
-            )
-        )
-
     elif sort_by == "most_soldout":
         rows.sort(
             key=lambda r: sum(
@@ -341,16 +354,27 @@ def sort_rows(rows, sort_by):
             reverse=True
         )
 
-    elif sort_by == "price_gap":
-        rows.sort(key=lambda r: r["price_gap"], reverse=True)
+    elif sort_by == "highest_price_gap":
+        rows.sort(
+            key=lambda r: r["price_gap"] if r.get("price_gap", 0) > 0 else -1,
+            reverse=True
+        )
+
+    elif sort_by == "lowest_price_gap":
+        rows.sort(
+            key=lambda r: r["price_gap"] if r.get("price_gap", 0) > 0 else float("inf")
+        )
 
 
-def calculate_column_averages(rows, columns):
-    summary = []
+def calculate_column_summary(rows, columns):
+    averages = []
+    highests = []
+    lowests = []
 
     for idx, (field, _) in enumerate(columns):
         total = 0
         count = 0
+        values = []
         is_percent = field in ["my_otb", "market_demand"]
 
         for row in rows:
@@ -359,16 +383,25 @@ def calculate_column_averages(rows, columns):
             if value is not None and not is_nan(value):
                 total += value
                 count += 1
+                values.append(value)
 
         if count:
             average = total / count
-            formatted = format_currency(round(average, 0), is_percent=is_percent)
+            avg_formatted = format_currency(round(average, 0), is_percent=is_percent)
+            max_formatted = format_currency(max(values), is_percent=is_percent)
+            min_formatted = format_currency(min(values), is_percent=is_percent)
         else:
-            formatted = None
+            avg_formatted = max_formatted = min_formatted = None
 
-        summary.append(formatted)
+        averages.append(avg_formatted)
+        highests.append(max_formatted)
+        lowests.append(min_formatted)
 
-    return summary
+    return {
+        "column_averages": averages,
+        "column_highests": highests,
+        "column_lowests": lowests,
+    }
 
 # ========================
 # View
@@ -389,12 +422,13 @@ def index(request):
     # 3. Truy vấn dữ liệu
     rates = DailyRate.objects.filter(updated_date__lte=end_dt, reported_date__year=year, reported_date__month=month)
     grouped_rates = group_rates_by_reported_date(rates)
-    valid_dates = sorted(set(rate.updated_date.strftime('%Y-%m-%d') for rate in rates))
+    valid_dates = sorted(set(rate.updated_date.strftime('%Y-%m-%d') for rate in DailyRate.objects.all()))
     latest_updated_date = DailyRate.objects.order_by('-updated_date').values_list('updated_date', flat=True).first()
     rows = build_comparison_rows(grouped_rates, start_dt, end_dt, month_str)
+
     sort_by = request.GET.get("sort_by", "oldest_reported")
     sort_rows(rows, sort_by)
-    total_sold_out, total_flex_out = calculate_rate_statistics(rows, COLUMNS)
+    total_sold_out, total_flex_out, highest_price, highest_price_resort, lowest_price, lowest_price_resort = calculate_rate_statistics(rows, COLUMNS)
 
     # 5. Tạo context
     context = {
@@ -410,7 +444,11 @@ def index(request):
         "month": month_str, 
         "sort_by": sort_by,
         "latest_updated_date": latest_updated_date.strftime("%Y-%m-%d") if latest_updated_date else None,
-        "column_averages": calculate_column_averages(rows, COLUMNS),
+        **calculate_column_summary(rows, COLUMNS),
+        "highest_price": format_currency(highest_price),
+        "highest_price_resort": highest_price_resort,
+        "lowest_price": format_currency(lowest_price),
+        "lowest_price_resort": lowest_price_resort,
     }
 
     if request.headers.get("HX-Request") == "true":

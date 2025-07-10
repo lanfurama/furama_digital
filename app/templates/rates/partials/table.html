@@ -1,7 +1,7 @@
  {% include 'rates/partials/stats.html' %}
 <div class="max-h-[60vh] md:max-h-[70vh] lg:max-h-[60vh] overflow-y-auto">
   
-<table class="w-full text-sm text-left table-auto" >
+<table class="w-full text-sm text-left table-auto"  id="ratesTableBody">
     <thead style="position: sticky; top: 0; z-index: 10; background: white;">
        <tr>
           <th class="p-3 font-bold">
@@ -15,25 +15,70 @@
           </div>
           </th>
           {% for col_key, col_label in columns %}
-            <th class="p-3 font-bold {% if col_key == 'furama_resort' %}text-blue-800 bg-gradient-to-r from-blue-100 to-green-100{% endif %}">{{ col_label }}</th>
+           <th class="p-2 font-bold text-center align-top whitespace-nowrap
+              {% if col_key == 'furama_resort' %}
+                text-green-800 bg-gradient-to-br from-blue-300 to-green-100
+              {% else %}
+                text-gray-800 bg-white border border-gray-200
+              {% endif %}
+              rounded-sm shadow-sm"
+            >
+              <div class="mb-1 text-[13px] font-semibold">{{ col_label }}</div>
+
+              {% load custom_filters %}
+              <div class=" text-[11px] grid grid-rows-3 gap-[2px] text-gray-600 font-medium bg-gray-100 rounded-md px-2 py-1 shadow-inner min-w-[120px]">
+                <div class="flex justify-between">
+                  <span class="text-gray-500">Lowest</span>
+                  <span class="text-gray-800 font-semibold">
+                    {{ column_lowests|index:forloop.counter0 }}
+                  </span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-500">Avg</span>
+                  <span class="text-gray-800 font-semibold">
+                    {{ column_averages|index:forloop.counter0 }}
+                  </span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-500">Highest</span>
+                  <span class="text-gray-800 font-semibold">
+                    {{ column_highests|index:forloop.counter0 }}
+                  </span>
+                </div>
+              </div>
+            </th>
+
           {% endfor %}
         </tr>
-         <tr class="bg-gradient-to-r from-sky-200 via-indigo-200 to-purple-200 font-bold text-black">
-      <td class="px-4 py-2"></td>
-      {% for avg in column_averages %}
-        <td class="px-4 py-2 text-[13px]">
-          {% if avg %}
-            {{ avg }}
-          {% else %}
-            -
-          {% endif %}
-        </td>
-  {% endfor %}
-</tr>
   
     </thead>
     <tbody>
+       <div id="loading-spinner"
+     class="absolute inset-0 z-20 flex items-center justify-center bg-white/70 backdrop-blur-sm opacity-0 transition-opacity duration-200 pointer-events-none">
+  <div class="relative">
+    <div class="h-12 w-12 rounded-full border-4 border-indigo-200 border-t-transparent animate-spin"></div>
+    <svg class="absolute inset-0 m-auto h-6 w-6 text-indigo-600 animate-pulse"
+         xmlns="http://www.w3.org/2000/svg" fill="none"
+         viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M13 16h-1v-4h-1m1-4h.01M12 20c4.418 0 8-3.582 8-8s-3.582-8-8-8-8 3.582-8 8 3.582 8 8 8z" />
+    </svg>
+  </div>
+</div>
+
         {% include "rates/partials/table_rows.html" %}
     </tbody>
 </table>
 </div>
+
+
+<script>
+  document.body.addEventListener("htmx:beforeRequest", function(evt) {
+    document.getElementById("loading-spinner").classList.remove("opacity-0");
+    document.getElementById("loading-spinner").classList.remove("opacity-100");
+  });
+  document.body.addEventListener("htmx:afterRequest", function(evt) {
+    document.getElementById("loading-spinner").classList.remove("opacity-100");
+    document.getElementById("loading-spinner").classList.remove("opacity-0");
+  });
+</script>

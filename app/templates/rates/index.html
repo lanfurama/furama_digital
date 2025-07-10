@@ -12,8 +12,7 @@
 <!-- Filter Section -->
 <div 
   x-data="ratesFilters({{ valid_dates|safe }}, '{{ start_date }}', '{{ end_date }}', '{{ month|default:'' }}', '{{ sort_by|default:"latest-updated" }}')" 
-  x-init="init()"
-  class="mt-6 space-y-4">
+  x-init="init()">
 
    {% include "rates/partials/filter.html" %}
 
@@ -23,5 +22,6 @@
       hx-target="#ratesTableWrapper">
     {% include "rates/partials/table.html" %}
   </div>
+
 </div>
 {% endblock %}

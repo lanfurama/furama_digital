@@ -113,7 +113,7 @@ class LighthouseRateFetcher:
         return {"status": "timeout", "message": "Không tìm thấy file sau khi export."}
 
     @staticmethod
-    def generate_months_around_current(current_month=None, months_before=2, months_after=1):
+    def generate_months_around_current(current_month=None, months_before=6, months_after=5):
         """
         Sinh danh sách tháng quanh tháng hiện tại: [YYYY-MM]
         """
